@@ -1,0 +1,62 @@
+name: ML Pipeline with Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pip-audit safety pip-licenses
+    
+    - name: Run vulnerability scan
+      run: |
+        echo "Checking for vulnerabilities..."
+        pip-audit -r requirements.txt --format json > vuln_report.json || true
+    
+    - name: Check licenses
+      run: |
+        echo "Checking licenses..."
+        pip-licenses --fail-on GPL --fail-on AGPL || true
+        pip-licenses --format=json > sbom.json
+    
+    - name: Run model training
+      run: |
+        python train_model.py
+        python save_model.py
+    
+    - name: Build Docker image
+      run: |
+        docker build -t titanic-ml-api:latest .
+    
+    - name: Test API
+      run: |
+        docker run -d --name test-api -p 8000:8000 titanic-ml-api:latest
+        sleep 5
+        curl -f http://localhost:8000/health || exit 1
+        docker stop test-api
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: audit-reports
+        path: |
+          vuln_report.json
+          sbom.json
+          audit_report.json
+
