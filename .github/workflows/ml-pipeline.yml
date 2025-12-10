@@ -38,7 +38,7 @@ jobs:
       
       - name: Test API
         run: |
-          # Запускаем на порту 9000 вместо 8000 (избегаем конфликтов)
+          # Запускаем на порту 9000
           docker run -d -p 9000:8000 --name test-api-${{ github.run_id }} ml-api:${{ github.sha }}
           
           echo "Waiting for API to start (10 seconds)..."
