@@ -64,7 +64,7 @@ jobs:
           docker stop test-api
 
       - name: Upload licenses report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: basic-licenses-report

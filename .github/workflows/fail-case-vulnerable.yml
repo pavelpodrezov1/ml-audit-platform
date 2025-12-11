@@ -82,7 +82,7 @@ jobs:
           echo "  pip install --upgrade requests cryptography"
 
       - name: Upload fail-case report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: fail-case-vulnerable-report
