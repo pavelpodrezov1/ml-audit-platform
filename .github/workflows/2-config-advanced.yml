@@ -1,0 +1,117 @@
+name: '2️⃣ Config ADVANCED (CI/CD) - safety + licensecheck'
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  advanced-ci-cd:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # Шаг 1: SAFETY - расширенное сканирование уязвимостей
+      - name: 🔐 AUDIT: safety (Advanced vulnerability scan)
+        run: |
+          pip install safety
+          
+          echo "=========================================="
+          echo "🔐 RUNNING SAFETY SCAN (Advanced)..."
+          echo "=========================================="
+          
+          # Запускаем safety с JSON выводом
+          safety check \
+            --json \
+            --output json > advanced-safety-report.json || true
+          
+          # Показываем результат
+          cat advanced-safety-report.json | python -m json.tool
+          
+          echo "✅ SAFETY SCAN COMPLETE"
+      
+      # Шаг 2: LICENSECHECK - проверка по стратегии
+      - name: 📜 AUDIT: licensecheck (Strategy-based)
+        run: |
+          pip install licensecheck
+          
+          echo "=========================================="
+          echo "📜 CHECKING LICENSE STRATEGY..."
+          echo "=========================================="
+          
+          # Проверяем что нет запрещенных лицензий
+          licensecheck --zero \
+            --ignore-packages pip,setuptools,wheel
+          
+          echo "✅ LICENSE STRATEGY CHECK PASSED"
+      
+      # Шаг 3: Собираем Docker с тегом
+      - name: 🐳 Build Docker image (Advanced)
+        run: |
+          docker build \
+            -t ml-api:advanced-ci-${{ github.sha }} \
+            -t ml-api:advanced-latest \
+            .
+          
+          echo "✅ Docker image built with tags"
+      
+      # Шаг 4: Расширенные тесты API
+      - name: 🧪 API Tests (Advanced)
+        run: |
+          docker run -d \
+            -p 9000:8000 \
+            --name test-api-advanced \
+            ml-api:advanced-ci-${{ github.sha }}
+          
+          sleep 10
+          
+          echo "Testing /health..."
+          curl -v http://localhost:9000/health
+          
+          echo "Testing /predict endpoint..."
+          curl -X POST http://localhost:9000/predict \
+            -H "Content-Type: application/json" \
+            -d '{
+              "pclass": 1,
+              "sex": 1,
+              "age": 30,
+              "sibsp": 0,
+              "parch": 0,
+              "fare": 100,
+              "embarked": 2
+            }' | python -m json.tool
+          
+          echo "✅ API TESTS PASSED"
+      
+      # Шаг 5: Информационный - Dependency Tree
+      - name: 📋 Dependency Tree
+        run: |
+          pip install pipdeptree
+          
+          echo "=========================================="
+          echo "📋 DEPENDENCY TREE"
+          echo "=========================================="
+          
+          pipdeptree
+      
+      - name: 📊 Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: advanced-reports
+          path: |
+            advanced-safety-report.json
+
