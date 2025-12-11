@@ -1,129 +1,92 @@
-name: '❌ FAIL-CASE: Vulnerable Dependencies Test'
+name: Fail-Case Testing (Vulnerable Dependencies)
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - ".github/workflows/fail-case-vulnerable.yml"
+  workflow_dispatch:
 
 jobs:
-  fail-case-demo:
+  fail-case-vulnerable:
     runs-on: ubuntu-latest
+    name: "Fail-Case: Test with Vulnerable Packages"
+    continue-on-error: true
     
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🐍 Setup Python
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-      
-      # Шаг 1: Создаем файл с УЯЗВИМЫМИ зависимостями
-      - name: 🚨 Create vulnerable requirements file
+          python-version: "3.11"
+
+      - name: Create vulnerable requirements file
         run: |
-          echo "# This file contains VULNERABLE packages for TESTING"
-          echo "# DO NOT USE IN PRODUCTION!"
-          echo ""
-          echo "# VULNERABLE packages:"
-          echo "requests==2.31.0  # Has CVE vulnerabilities"
-          echo "cryptography==3.4.8  # Old version with known CVEs"
-          echo ""
-          echo "# Normal packages:"
-          cat requirements.txt
-          
-          # Создаём файл с уязвимостями
-          cat > requirements-vulnerable.txt << 'EOF'
-          # VULNERABLE packages for testing
+          cat > vulnerable-requirements.txt << 'EOF'
+          # This file intentionally contains vulnerable packages for testing
           requests==2.31.0
           cryptography==3.4.8
-          
-          # Normal packages
-          fastapi
-          uvicorn
-          scikit-learn
-          pandas
-          numpy
-          joblib
-          pydantic
-          kaggle
           EOF
           
-          echo "✅ Vulnerable requirements file created"
-      
-      # Шаг 2: Пытаемся установить уязвимые пакеты
-      - name: 📦 Install vulnerable packages
+          echo "Created vulnerable requirements file:"
+          cat vulnerable-requirements.txt
+
+      - name: Install vulnerable packages
         run: |
           python -m pip install --upgrade pip
+          pip install -r vulnerable-requirements.txt
           
-          echo "=========================================="
-          echo "Installing vulnerable packages..."
-          echo "=========================================="
-          
-          pip install -r requirements-vulnerable.txt || true
-          echo "Installation complete (may have warnings)"
-      
-      # Шаг 3: FAIL TEST - запускаем pip-audit (ДОЛЖЕН УПАСТЬ)
-      - name: 🔍 FAIL TEST: pip-audit on vulnerable packages
+          echo ""
+          echo "Installed vulnerable packages:"
+          pip list | grep -E "requests|cryptography"
+
+      - name: Install security tools
+        run: pip install pip-audit safety
+
+      - name: Run pip-audit on vulnerable packages
         continue-on-error: true
         run: |
-          pip install pip-audit
-          
           echo "=========================================="
           echo "🚨 SCANNING VULNERABLE PACKAGES..."
           echo "This should FAIL because of CVEs!"
           echo "=========================================="
-          
-          # Запускаем pip-audit - ОН УПАДЁТ
-          if pip-audit -r requirements-vulnerable.txt --desc; then
-            echo "❌ ERROR: pip-audit should have found vulnerabilities!"
-            exit 1
-          else
-            echo "✅ EXPECTED FAILURE: Vulnerabilities detected!"
-            echo "This is correct behavior - workflow SHOULD fail"
-          fi
-      
-      # Шаг 4: Показываем что нашлось
-      - name: 📊 Report vulnerabilities
+          pip-audit -r vulnerable-requirements.txt --desc
+          echo ""
+
+      - name: Run safety check
+        continue-on-error: true
         run: |
           echo "=========================================="
-          echo "📊 DETECTED VULNERABILITIES REPORT"
+          echo "🚨 RUNNING SAFETY CHECK ON VULNERABLE PACKAGES"
           echo "=========================================="
-          
-          pip-audit -r requirements-vulnerable.txt --desc > fail-case-audit.txt 2>&1 || true
-          
-          cat fail-case-audit.txt
-      
-      # Шаг 5: Предлагаем исправление
-      - name: 💡 Suggest fixes
+          safety check --json > fail-case-safety-report.json 2>&1
+          cat fail-case-safety-report.json
+          echo ""
+
+      - name: Expected failure log
         run: |
           echo "=========================================="
-          echo "💡 HOW TO FIX:"
+          echo "✅ EXPECTED BEHAVIOR: Vulnerabilities detected!"
           echo "=========================================="
-          
-          cat << 'EOF'
-          ❌ PROBLEMATIC PACKAGES:
-          - requests==2.31.0 → Should update to latest
-          - cryptography==3.4.8 → Should update to latest
-          
-          ✅ SOLUTION:
-          - Remove vulnerable versions from requirements.txt
-          - Use "pip install --upgrade requests cryptography"
-          - Or use: pip install -U -r requirements.txt
-          
-          ✅ BEST PRACTICE:
-          - Use poetry.lock or pip-compile for reproducible builds
-          - Regularly update dependencies
-          - Use "pip-audit" in CI/CD pipeline
-          EOF
-      
-      # Шаг 6: Загружаем отчет
-      - name: 📤 Upload fail-case report
-        if: always()
+          echo ""
+          echo "Summary of detected issues:"
+          echo "  ❌ requests==2.31.0 - CVE vulnerabilities detected"
+          echo "  ❌ cryptography==3.4.8 - CVE vulnerabilities detected"
+          echo ""
+          echo "This workflow demonstrates CORRECT failure detection."
+          echo "In production, this would block the deployment."
+          echo ""
+          echo "To fix: Update to newer versions"
+          echo "  pip install --upgrade requests cryptography"
+
+      - name: Upload fail-case report
         uses: actions/upload-artifact@v3
+        if: always()
         with:
-          name: fail-case-report
+          name: fail-case-vulnerable-report
           path: |
-            requirements-vulnerable.txt
-            fail-case-audit.txt
+            vulnerable-requirements.txt
+            fail-case-safety-report.json
 

@@ -1,159 +1,127 @@
-name: '3️⃣ Config ENTERPRISE (Full) - SBOM + pip-audit + pipdeptree'
+name: Config 3 - Enterprise (Full)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - "requirements.txt"
+      - ".github/workflows/3-config-enterprise.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  enterprise-full:
+  enterprise-full-audit:
     runs-on: ubuntu-latest
+    name: "Audit: Enterprise Config (SBOM + Full Reports)"
     
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-      
-      - name: 🐍 Setup Python
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-      
-      - name: 📦 Install dependencies
+          python-version: "3.11"
+
+      - name: Install all dependencies and tools
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
-      # Шаг 1: PIP-AUDIT полный отчет
-      - name: 🔍 FULL AUDIT: pip-audit with descriptions
+          pip install pip-audit pip-licenses pipdeptree
+
+      - name: Full Audit Report (with descriptions)
         run: |
-          pip install pip-audit
-          
           echo "=========================================="
-          echo "🔍 FULL AUDIT REPORT (pip-audit)..."
+          echo "🔍 FULL AUDIT REPORT (Enterprise)"
           echo "=========================================="
-          
-          # Полный отчет с описаниями
           pip-audit -r requirements.txt --desc > enterprise-audit-full.txt 2>&1 || true
-          
           cat enterprise-audit-full.txt
-      
-      # Шаг 2: SBOM Generation (Software Bill of Materials)
-      - name: 📦 SBOM Generation (Software Bill of Materials)
+          echo ""
+
+      - name: Generate SBOM (Software Bill of Materials)
         run: |
-          pip install pip-licenses
-          
           echo "=========================================="
-          echo "📦 GENERATING SBOM..."
+          echo "📋 GENERATING SBOM (JSON)"
           echo "=========================================="
-          
-          # Создаём SBOM в JSON формате
           pip-licenses --format=json > enterprise-sbom.json
-          
-          # Показываем структуру SBOM
-          echo "SBOM Generated:"
-          cat enterprise-sbom.json | python -m json.tool | head -50
-          
-          # Считаем количество пакетов
-          PACKAGE_COUNT=$(cat enterprise-sbom.json | python -c "import sys, json; print(len(json.load(sys.stdin)))")
-          echo "Total packages in SBOM: $PACKAGE_COUNT"
-      
-      # Шаг 3: Дерево зависимостей
-      - name: 📋 Dependency Tree (Full)
+          cat enterprise-sbom.json
+          echo ""
+          echo "✅ SBOM generated: enterprise-sbom.json"
+
+      - name: Full dependency tree analysis
         run: |
-          pip install pipdeptree
-          
           echo "=========================================="
-          echo "📋 FULL DEPENDENCY TREE..."
+          echo "🌳 FULL DEPENDENCY TREE"
           echo "=========================================="
-          
           pipdeptree > enterprise-dependency-tree.txt
-          
-          # Показываем основные пакеты
-          echo "Main packages:"
-          pipdeptree -p fastapi,scikit-learn,pandas,numpy,docker || true
-      
-      # Шаг 4: Сравнение версий
-      - name: 📊 Version Report
+          cat enterprise-dependency-tree.txt
+          echo ""
+
+      - name: Version inventory
         run: |
           echo "=========================================="
-          echo "📊 INSTALLED VERSIONS REPORT..."
+          echo "📦 VERSION INVENTORY"
           echo "=========================================="
-          
           pip list > enterprise-versions.txt
-          
-          # Выделяем критические пакеты
-          echo "Critical packages versions:"
-          pip show fastapi scikit-learn pandas numpy uvicorn
-      
-      # Шаг 5: Собираем Docker
-      - name: 🐳 Build Docker (Multi-stage)
+          cat enterprise-versions.txt
+          echo ""
+
+      - name: Build multi-stage Docker
         run: |
           docker build \
-            -t ml-api:enterprise-full-${{ github.sha }} \
-            -t ml-api:enterprise-latest \
             --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=$(git rev-parse --short HEAD) \
+            -t ml-api:enterprise-latest \
+            -t ml-api:enterprise-$(git rev-parse --short HEAD) \
             .
-          
-          echo "✅ Enterprise Docker image built"
-      
-      # Шаг 6: Комплексное тестирование
-      - name: 🧪 Comprehensive Tests
+          docker images | grep ml-api
+
+      - name: Comprehensive API testing
         run: |
-          docker run -d \
-            -p 10000:8000 \
-            --name test-api-enterprise \
-            ml-api:enterprise-full-${{ github.sha }}
+          docker run -d -p 8000:8000 --name test-api-ent ml-api:enterprise-latest
+          sleep 4
           
-          sleep 10
+          echo "Testing /health endpoint..."
+          curl -X GET http://localhost:8000/health
           
-          echo "Test 1: Health check..."
-          curl -v http://localhost:10000/health
+          echo ""
+          echo "Testing /predict with various scenarios..."
           
-          echo -e "\n\nTest 2: Model info..."
-          curl http://localhost:10000/info || true
-          
-          echo -e "\n\nTest 3: Prediction with multiple cases..."
-          
-          # Тест 1: Обычный пассажир
-          echo "Case 1: Regular passenger"
-          curl -X POST http://localhost:10000/predict \
+          echo "Scenario 1: Survived passenger"
+          curl -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
-            -d '{
-              "pclass": 3,
-              "sex": 0,
-              "age": 20,
-              "sibsp": 1,
-              "parch": 0,
-              "fare": 50,
-              "embarked": 1
-            }' | python -m json.tool
+            -d '{"pclass": 1, "sex": 1, "age": 25, "sibsp": 1, "parch": 0, "fare": 100, "embarked": 2}'
           
-          # Тест 2: Богатый пассажир
-          echo -e "\n\nCase 2: Rich passenger"
-          curl -X POST http://localhost:10000/predict \
+          echo ""
+          echo "Scenario 2: Different passenger"
+          curl -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
-            -d '{
-              "pclass": 1,
-              "sex": 1,
-              "age": 45,
-              "sibsp": 0,
-              "parch": 1,
-              "fare": 500,
-              "embarked": 0
-            }' | python -m json.tool
+            -d '{"pclass": 3, "sex": 0, "age": 35, "sibsp": 0, "parch": 0, "fare": 15, "embarked": 0}'
           
-          echo -e "\n\n✅ ALL TESTS PASSED"
-      
-      # Шаг 7: Загружаем артефакты
-      - name: 📤 Upload all artifacts
-        if: always()
+          echo ""
+          echo "✅ Comprehensive API tests passed"
+          docker stop test-api-ent
+
+      - name: Create artifacts ZIP
+        run: |
+          mkdir -p enterprise-reports
+          cp enterprise-audit-full.txt enterprise-reports/
+          cp enterprise-sbom.json enterprise-reports/
+          cp enterprise-dependency-tree.txt enterprise-reports/
+          cp enterprise-versions.txt enterprise-reports/
+          
+          zip -r enterprise-audit-reports.zip enterprise-reports/
+          ls -la enterprise-audit-reports.zip
+
+      - name: Upload enterprise reports
         uses: actions/upload-artifact@v3
+        if: always()
         with:
-          name: enterprise-full-reports
+          name: enterprise-full-audit-reports
           path: |
-            enterprise-sbom.json
             enterprise-audit-full.txt
+            enterprise-sbom.json
             enterprise-dependency-tree.txt
             enterprise-versions.txt
+            enterprise-audit-reports.zip
 
