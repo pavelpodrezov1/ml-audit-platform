@@ -50,6 +50,16 @@
     "Version": "3.0.3"
   },
   {
+    "License": "MIT License",
+    "Name": "PyYAML",
+    "Version": "6.0.3"
+  },
+  {
+    "License": "MIT License",
+    "Name": "PyYAML",
+    "Version": "6.0.3"
+  },
+  {
     "License": "BSD License",
     "Name": "Pygments",
     "Version": "2.19.2"
@@ -232,12 +242,12 @@
   {
     "License": "MIT",
     "Name": "fastapi",
-    "Version": "0.124.0"
+    "Version": "0.124.2"
   },
   {
     "License": "MIT",
     "Name": "fastapi",
-    "Version": "0.124.0"
+    "Version": "0.124.2"
   },
   {
     "License": "MIT License",
@@ -280,6 +290,16 @@
     "Version": "1.0.9"
   },
   {
+    "License": "MIT",
+    "Name": "httptools",
+    "Version": "0.7.1"
+  },
+  {
+    "License": "MIT",
+    "Name": "httptools",
+    "Version": "0.7.1"
+  },
+  {
     "License": "BSD License",
     "Name": "httpx",
     "Version": "0.28.1"
@@ -300,9 +320,14 @@
     "Version": "3.11"
   },
   {
-    "License": "BSD License",
-    "Name": "joblib",
-    "Version": "1.5.2"
+    "License": "MIT",
+    "Name": "iniconfig",
+    "Version": "2.3.0"
+  },
+  {
+    "License": "MIT",
+    "Name": "iniconfig",
+    "Version": "2.3.0"
   },
   {
     "License": "BSD License",
@@ -310,14 +335,19 @@
     "Version": "1.5.2"
   },
   {
-    "License": "Apache Software License",
-    "Name": "kaggle",
-    "Version": "1.8.2"
+    "License": "BSD License",
+    "Name": "joblib",
+    "Version": "1.5.2"
   },
   {
-    "License": "Apache Software License",
+    "License": "Apache 2.0",
     "Name": "kaggle",
-    "Version": "1.8.2"
+    "Version": "1.6.14"
+  },
+  {
+    "License": "Apache 2.0",
+    "Name": "kaggle",
+    "Version": "1.6.14"
   },
   {
     "License": "Apache Software License",
@@ -521,6 +551,16 @@
   },
   {
     "License": "MIT",
+    "Name": "pipdeptree",
+    "Version": "2.30.0"
+  },
+  {
+    "License": "MIT",
+    "Name": "pipdeptree",
+    "Version": "2.30.0"
+  },
+  {
+    "License": "MIT",
     "Name": "platformdirs",
     "Version": "4.5.1"
   },
@@ -528,6 +568,16 @@
     "License": "MIT",
     "Name": "platformdirs",
     "Version": "4.5.1"
+  },
+  {
+    "License": "MIT License",
+    "Name": "pluggy",
+    "Version": "1.6.0"
+  },
+  {
+    "License": "MIT License",
+    "Name": "pluggy",
+    "Version": "1.6.0"
   },
   {
     "License": "3-Clause BSD License",
@@ -590,6 +640,16 @@
     "Version": "3.2.5"
   },
   {
+    "License": "MIT License",
+    "Name": "pytest",
+    "Version": "8.3.4"
+  },
+  {
+    "License": "MIT License",
+    "Name": "pytest",
+    "Version": "8.3.4"
+  },
+  {
     "License": "Apache Software License; BSD License",
     "Name": "python-dateutil",
     "Version": "2.9.0.post0"
@@ -598,6 +658,26 @@
     "License": "Apache Software License; BSD License",
     "Name": "python-dateutil",
     "Version": "2.9.0.post0"
+  },
+  {
+    "License": "BSD License",
+    "Name": "python-dotenv",
+    "Version": "1.0.1"
+  },
+  {
+    "License": "BSD License",
+    "Name": "python-dotenv",
+    "Version": "1.0.1"
+  },
+  {
+    "License": "Apache-2.0",
+    "Name": "python-multipart",
+    "Version": "0.0.20"
+  },
+  {
+    "License": "Apache-2.0",
+    "Name": "python-multipart",
+    "Version": "0.0.20"
   },
   {
     "License": "MIT License",
@@ -722,12 +802,12 @@
   {
     "License": "BSD-3-Clause",
     "Name": "scikit-learn",
-    "Version": "1.7.2"
+    "Version": "1.8.0"
   },
   {
     "License": "BSD-3-Clause",
     "Name": "scikit-learn",
-    "Version": "1.7.2"
+    "Version": "1.8.0"
   },
   {
     "License": "BSD License",
@@ -942,12 +1022,32 @@
   {
     "License": "BSD-3-Clause",
     "Name": "uvicorn",
-    "Version": "0.38.0"
+    "Version": "0.30.0"
   },
   {
     "License": "BSD-3-Clause",
     "Name": "uvicorn",
-    "Version": "0.38.0"
+    "Version": "0.30.0"
+  },
+  {
+    "License": "Apache Software License; MIT License",
+    "Name": "uvloop",
+    "Version": "0.22.1"
+  },
+  {
+    "License": "Apache Software License; MIT License",
+    "Name": "uvloop",
+    "Version": "0.22.1"
+  },
+  {
+    "License": "MIT License",
+    "Name": "watchfiles",
+    "Version": "1.1.1"
+  },
+  {
+    "License": "MIT License",
+    "Name": "watchfiles",
+    "Version": "1.1.1"
   },
   {
     "License": "BSD License",
@@ -958,5 +1058,15 @@
     "License": "BSD License",
     "Name": "webencodings",
     "Version": "0.5.1"
+  },
+  {
+    "License": "BSD License",
+    "Name": "websockets",
+    "Version": "15.0.1"
+  },
+  {
+    "License": "BSD License",
+    "Name": "websockets",
+    "Version": "15.0.1"
   }
 ]

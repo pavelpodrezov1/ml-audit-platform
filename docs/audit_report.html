@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Audit Platform - Audit Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 10px;
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .status.fail {
+            background: #ff6b6b;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .summary-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .summary-card.critical {
+            border-left-color: #ff6b6b;
+        }
+        
+        .summary-card.warning {
+            border-left-color: #ffd43b;
+        }
+        
+        .summary-card h3 {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .summary-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        h2 {
+            color: #333;
+            margin: 30px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        h3 {
+            color: #555;
+            margin: 20px 0 15px 0;
+        }
+        
+        .vulnerability {
+            background: #fff5f5;
+            border-left: 4px solid #ff6b6b;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        
+        .vulnerability.critical {
+            background: #ffe0e0;
+        }
+        
+        .vuln-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .severity-critical {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .severity-high {
+            background: #ffa94d;
+            color: white;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .code-block {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .status-safe {
+            background: #51cf66;
+            color: white;
+        }
+        
+        .status-vulnerable {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #764ba2;
+        }
+        
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #eee;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #eee;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 ML Audit Platform</h1>
+            <p>Software Dependencies & Vulnerabilities Analysis</p>
+            <div class="status fail">⚠️ VULNERABILITIES DETECTED</div>
+        </div>
+        
+        <div class="content">
+            <!-- EXECUTIVE SUMMARY -->
+            <h2>📋 Executive Summary</h2>
+            
+            <div class="summary">
+                <div class="summary-card">
+                    <h3>Total Packages</h3>
+                    <div class="value">50+</div>
+                </div>
+                <div class="summary-card critical">
+                    <h3>Vulnerabilities Found</h3>
+                    <div class="value">10</div>
+                </div>
+                <div class="summary-card critical">
+                    <h3>Critical Issues</h3>
+                    <div class="value">8</div>
+                </div>
+                <div class="summary-card warning">
+                    <h3>High Severity</h3>
+                    <div class="value">2</div>
+                </div>
+            </div>
+            
+            <!-- CRITICAL VULNERABILITIES -->
+            <h2>🚨 Critical Vulnerabilities</h2>
+            
+            <div class="vulnerability critical">
+                <div class="vuln-title">
+                    <h3 style="margin: 0;">🔴 cryptography==3.4.8</h3>
+                    <span class="severity-badge severity-critical">CRITICAL (8 CVE)</span>
+                </div>
+                <p><strong>Status:</strong> ⚠️ MUST UPDATE</p>
+                <p><strong>Recommended Fix:</strong> Upgrade to <code>cryptography>=46.0.0</code></p>
+                
+                <h4 style="margin-top: 15px;">Vulnerabilities:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>CVE ID</th>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>PYSEC-2023-254</strong></td>
+                            <td><span class="severity-badge severity-critical">CRITICAL</span></td>
+                            <td>DoS</td>
+                            <td>NULL-pointer dereference in PKCS7 parsing</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CVE-2023-23931</strong></td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>Memory</td>
+                            <td>Buffer protocol violation in update_into</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CVE-2023-0286</strong></td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>OpenSSL</td>
+                            <td>OpenSSL vulnerability in bundled library</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CVE-2024-0727</strong></td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>OpenSSL</td>
+                            <td>NULL pointer dereference in PKCS12</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h4>Quick Fix:</h4>
+                <div class="code-block">pip install --upgrade cryptography
+# Current: 3.4.8 → Recommended: 46.0.3+</div>
+            </div>
+            
+            <div class="vulnerability">
+                <div class="vuln-title">
+                    <h3 style="margin: 0;">🔴 requests==2.31.0</h3>
+                    <span class="severity-badge severity-high">HIGH (2 CVE)</span>
+                </div>
+                <p><strong>Status:</strong> ⚠️ NEEDS UPDATE</p>
+                <p><strong>Recommended Fix:</strong> Upgrade to <code>requests>=2.32.5</code></p>
+                
+                <h4 style="margin-top: 15px;">Vulnerabilities:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>CVE ID</th>
+                            <th>Severity</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>CVE-2024-35195</strong></td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>SSL verification bypass on session reuse</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CVE-2024-47081</strong></td>
+                            <td><span class="severity-badge severity-high">HIGH</span></td>
+                            <td>.netrc credentials leaked to third parties</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <h4>Quick Fix:</h4>
+                <div class="code-block">pip install --upgrade requests
+# Current: 2.31.0 → Recommended: 2.32.5+</div>
+            </div>
+            
+            <!-- SAFE PACKAGES -->
+            <h2>✅ Safe Packages (Top Dependencies)</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Package</th>
+                        <th>Version</th>
+                        <th>License</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>fastapi</strong></td>
+                        <td>0.124.2</td>
+                        <td>BSD</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>scikit-learn</strong></td>
+                        <td>1.8.0</td>
+                        <td>BSD</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>pandas</strong></td>
+                        <td>2.3.3</td>
+                        <td>BSD</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>numpy</strong></td>
+                        <td>2.3.5</td>
+                        <td>BSD</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>uvicorn</strong></td>
+                        <td>0.30.0</td>
+                        <td>BSD</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>pydantic</strong></td>
+                        <td>2.12.5</td>
+                        <td>MIT</td>
+                        <td><span class="status-badge status-safe">✅ SAFE</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- REMEDIATION -->
+            <h2>🔧 Remediation Steps</h2>
+            
+            <h3>Immediate Actions</h3>
+            <div class="code-block"># 1. Update cryptography
+pip install --upgrade cryptography
+
+# 2. Update requests
+pip install --upgrade requests
+
+# 3. Verify no vulnerabilities remain
+pip-audit -r requirements.txt
+            </div>
+            
+            <h3>Updated Requirements.txt</h3>
+            <div class="code-block"># Web Framework & API
+fastapi==0.124.2
+uvicorn==0.30.0
+starlette==0.50.0
+pydantic==2.12.5
+
+# ML & Data Processing
+scikit-learn==1.8.0
+pandas==2.3.3
+numpy==2.3.5
+joblib==1.5.2
+
+# Data & Security (UPDATED)
+requests==2.32.5        # ← Updated from 2.31.0
+cryptography==46.0.3    # ← Updated from 3.4.8
+kaggle==1.6.14
+            </div>
+            
+            <!-- FOOTER -->
+            <div style="text-align: center; margin-top: 40px;">
+                <a href="#" class="btn">Download Full Report (PDF)</a>
+                <a href="#" class="btn">View SBOM (JSON)</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>Report Generated:</strong> 2025-12-12</p>
+            <p><strong>Format:</strong> Enterprise Full Audit</p>
+            <p><strong>Tools:</strong> pip-audit, pip-licenses, safety</p>
+            <p style="margin-top: 15px; font-size: 0.9em;">ML Audit Platform © 2025</p>
+        </div>
+    </div>
+</body>
+</html>
