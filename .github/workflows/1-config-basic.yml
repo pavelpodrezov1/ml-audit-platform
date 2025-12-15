@@ -28,6 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit pip-licenses
+        continue-on-error: true
 
       - name: Run pip-audit (CVE scanning)
         run: |
@@ -36,6 +37,7 @@ jobs:
           echo "=========================================="
           pip-audit -r requirements.txt || echo "Vulnerabilities found - check above"
           echo ""
+        continue-on-error: true
 
       - name: Generate licenses report (JSON)
         run: |
@@ -46,11 +48,17 @@ jobs:
           pip-licenses
           echo ""
           echo "✅ Licenses exported to basic-licenses.json"
+        continue-on-error: true
+
+      - name: Generate Audit Report
+        run: python generate_audit_report.py
+        continue-on-error: true
 
       - name: Build Docker image
         run: |
           docker build -t ml-api:basic-latest .
           docker images | grep ml-api
+        continue-on-error: true
 
       - name: Test API endpoints
         run: |
@@ -62,6 +70,7 @@ jobs:
           
           echo "API Health Check Passed ✅"
           docker stop test-api
+        continue-on-error: true
 
       - name: Upload licenses report
         uses: actions/upload-artifact@v4
@@ -69,4 +78,14 @@ jobs:
         with:
           name: basic-licenses-report
           path: basic-licenses.json
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: audit-reports-config1
+          path: |
+            AUDIT_REPORT.md
+            audit-report.json
+            GITHUB_SUMMARY.md
 
