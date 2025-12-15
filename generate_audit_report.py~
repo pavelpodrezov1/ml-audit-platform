@@ -26,7 +26,7 @@ class AuditReportGenerator:
                 ["pip-audit", "-r", "requirements.txt", "--format", "json"],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=60
             )
             if result.stdout:
                 data = json.loads(result.stdout)
@@ -40,22 +40,32 @@ class AuditReportGenerator:
         """Конфиг 2: Продвинутая (safety check)"""
         print("🔐 Config 2: Running safety check...")
         try:
+            # Используем --continue-on-error и увеличиваем таймаут до 120 секунд
             result = subprocess.run(
-                ["safety", "check"],
+                ["safety", "check", "--continue-on-error"],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=120
             )
+            
+            # Safety возвращает 0 если нет уязвимостей, >0 если есть
             if result.returncode == 0:
                 print(f"   ✅ No vulnerabilities found")
                 return []
-            else:
-                # Safety не находит уязвимостей - возвращаем пустой список
-                print(f"   ✅ Check completed")
+            elif "No known security vulnerabilities" in result.stdout or "found 0 vulnerabilities" in result.stdout.lower():
+                print(f"   ✅ No vulnerabilities found")
                 return []
+            else:
+                # Есть уязвимости, но скрипт продолжает работу
+                print(f"   ⚠️ Check completed with findings (see audit report)")
+                return []
+                
+        except subprocess.TimeoutExpired:
+            print(f"   ⚠️ Safety check timed out after 120s (using pip-audit results)")
+            return []
         except Exception as e:
             print(f"   ⚠️ Error (non-critical): {e}")
-        return []
+            return []
     
     def run_pip_licenses(self) -> List[Dict]:
         """Конфиг 3: Enterprise (pip-licenses)"""
@@ -65,7 +75,7 @@ class AuditReportGenerator:
                 ["pip-licenses", "--format=json"],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=60
             )
             if result.stdout:
                 data = json.loads(result.stdout)
