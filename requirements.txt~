@@ -18,7 +18,7 @@ typing-extensions==4.15.0
 annotated-types==0.7.0
 
 # ========== HTTP CLIENTS ==========
-requests==2.32.5
+requests==2.31.0
 httpx==0.28.1
 certifi==2025.11.12
 charset-normalizer==3.4.4
