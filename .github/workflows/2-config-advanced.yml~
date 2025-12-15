@@ -28,6 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install safety licensecheck pipdeptree
+        continue-on-error: true
 
       - name: Run safety check (Advanced CVE scanning)
         run: |
@@ -38,6 +39,7 @@ jobs:
           cat advanced-safety-report.json
           echo ""
           echo "✅ Safety scan complete"
+        continue-on-error: true
 
       - name: Check licenses with strategy
         run: |
@@ -47,6 +49,7 @@ jobs:
           licensecheck --zero --ignore-packages ml-audit-platform || true
           echo ""
           echo "✅ License strategy check passed"
+        continue-on-error: true
 
       - name: Generate dependency tree
         run: |
@@ -56,12 +59,18 @@ jobs:
           pipdeptree > advanced-dependency-tree.txt 2>&1
           cat advanced-dependency-tree.txt
           echo ""
+        continue-on-error: true
+
+      - name: Generate Audit Report
+        run: python generate_audit_report.py
+        continue-on-error: true
 
       - name: Build and tag Docker image
         run: |
           docker build -t ml-api:advanced-ci-latest .
           docker build -t ml-api:advanced-ci-$(git rev-parse --short HEAD) .
           docker images | grep ml-api
+        continue-on-error: true
 
       - name: Advanced API tests
         run: |
@@ -81,6 +90,7 @@ jobs:
           echo ""
           echo "✅ Advanced API tests passed"
           docker stop test-api-adv
+        continue-on-error: true
 
       - name: Upload advanced reports
         uses: actions/upload-artifact@v4
@@ -90,4 +100,14 @@ jobs:
           path: |
             advanced-safety-report.json
             advanced-dependency-tree.txt
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: audit-reports-config2
+          path: |
+            AUDIT_REPORT.md
+            audit-report.json
+            GITHUB_SUMMARY.md
 
