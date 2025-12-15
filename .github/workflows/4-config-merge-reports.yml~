@@ -1,0 +1,77 @@
+name: Config 4 - Merge All Audit Reports
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requirements.txt"
+      - ".github/workflows/1-config-basic.yml"
+      - ".github/workflows/2-config-advanced.yml"
+      - ".github/workflows/3-config-enterprise.yml"
+  pull_request:
+    branches: [main]
+  workflow_run:
+    workflows: ["Config 1 - Basic Audit (PoC)", "Config 2 - Advanced CI/CD", "Config 3 - Enterprise (Full)"]
+    types: [completed]
+
+jobs:
+  merge-reports:
+    runs-on: ubuntu-latest
+    name: "Merge Reports from All 3 Configs"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit pip-licenses pipdeptree
+
+      - name: Generate Unified Audit Report
+        run: |
+          echo "=========================================="
+          echo "🔄 MERGING ALL AUDIT REPORTS..."
+          echo "=========================================="
+          python generate_audit_report.py
+          echo ""
+          echo "✅ Unified report generated"
+
+      - name: Display Generated Report
+        run: |
+          echo "=========================================="
+          echo "📋 FINAL AUDIT REPORT"
+          echo "=========================================="
+          cat AUDIT_REPORT.md
+          echo ""
+
+      - name: Commit and Push Updated Report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet AUDIT_REPORT.md; then
+            echo "ℹ️ No changes to AUDIT_REPORT.md"
+          else
+            echo "📝 AUDIT_REPORT.md has changed, committing..."
+            git add AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
+            git commit -m "Update: Automated audit report generation from all configs"
+            git push origin main
+          fi
+
+      - name: Upload Final Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-merged-audit-reports
+          path: |
+            AUDIT_REPORT.md
+            audit-report.json
+            GITHUB_SUMMARY.md
+
