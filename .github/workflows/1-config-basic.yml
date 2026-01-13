@@ -42,6 +42,16 @@ jobs:
           pip install -r requirements.txt
         continue-on-error: false
 
+      - name: Clean up old packages
+        run: |
+          echo "=========================================="
+          echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
+          echo "=========================================="
+          # Remove packages that are no longer in requirements.txt
+          pip uninstall -y text-unidecode 2>/dev/null || true
+          echo "✅ Cleanup completed"
+        continue-on-error: true
+
       - name: Train ML Model
         run: |
           echo "=========================================="

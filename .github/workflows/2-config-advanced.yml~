@@ -66,7 +66,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install safety licensecheck pipdeptree pip-licenses
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Install project dependencies (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
@@ -94,14 +94,20 @@ jobs:
           safety check --json > advanced-safety-report.json
           cat advanced-safety-report.json
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Check for forbidden licenses (GPL strategy)
         run: |
           echo "=========================================="
           echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
           echo "=========================================="
-          licensecheck
+          licensecheck --zero
+          # Дополнительная проверка на GPL
+          if pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
           echo ""
         continue-on-error: false
 
@@ -178,17 +184,44 @@ jobs:
         run: |
           docker run -d -p 8000:8000 --name test-api-adv ghcr.io/${{ github.repository }}/ml-api:advanced-latest
           sleep 4
+          
+          echo "=========================================="
+          echo "🧪 TESTING API ENDPOINTS (Advanced)..."
+          echo "=========================================="
+          echo ""
+          
+          # Test 1: Health check
           echo "Testing /health endpoint..."
-          curl -X GET http://localhost:8000/health -H "Content-Type: application/json"
+          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
+          echo "Response: $HEALTH_RESPONSE"
+          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
           echo ""
+          
+          # Test 2: Predict endpoint
           echo "Testing /predict endpoint..."
-          curl -X POST http://localhost:8000/predict \
+          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
-            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}'
+            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
+          echo "Response: $PREDICT_RESPONSE"
+          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
+            echo "✅ Predict endpoint passed"
+          else
+            echo "❌ Predict endpoint failed"
+            exit 1
+          fi
           echo ""
-          echo "✅ Advanced API tests passed"
+          
+          echo "=========================================="
+          echo "✅ All Advanced API tests passed!"
+          echo "=========================================="
+          
           docker stop test-api-adv || true
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4
