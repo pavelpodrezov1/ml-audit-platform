@@ -61,7 +61,7 @@ jobs:
           echo "=========================================="
           pip-audit -r requirements.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate licenses report (JSON)
         run: |
@@ -108,11 +108,53 @@ jobs:
         run: |
           docker run -d -p 8000:8000 --name test-api ghcr.io/${{ github.repository }}/ml-api:basic-latest
           sleep 3
+          
+          echo "=========================================="
+          echo "🧪 TESTING API ENDPOINTS..."
+          echo "=========================================="
+          echo ""
+          
+          # Test 1: Health check
           echo "Testing /health endpoint..."
-          curl -X GET http://localhost:8000/health || echo "Health check failed"
-          echo "API Health Check Passed ✅"
+          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
+          echo "Response: $HEALTH_RESPONSE"
+          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
+          echo ""
+          
+          # Test 2: Predict endpoint with sample data
+          echo "Testing /predict endpoint..."
+          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{
+              "PassengerId": 892,
+              "Pclass": 3,
+              "Sex": "male",
+              "Age": 34.5,
+              "SibSp": 0,
+              "Parch": 0,
+              "Fare": 7.8292,
+              "Embarked": "Q"
+            }')
+          echo "Response: $PREDICT_RESPONSE"
+          if echo "$PREDICT_RESPONSE" | grep -q -E '"survived"|"prediction"|"probability"'; then
+            echo "✅ Predict endpoint passed"
+          else
+            echo "❌ Predict endpoint failed or returned unexpected format"
+            exit 1
+          fi
+          echo ""
+          
+          echo "=========================================="
+          echo "✅ All API tests passed!"
+          echo "=========================================="
+          
           docker stop test-api || true
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4

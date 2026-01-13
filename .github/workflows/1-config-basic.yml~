@@ -34,7 +34,7 @@ jobs:
       - name: Install audit tools first
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit pip-licenses licensecheck
+          pip install pip-audit pip-licenses
         continue-on-error: false
 
       - name: Install project dependencies
@@ -62,15 +62,6 @@ jobs:
           pip-audit -r requirements.txt
           echo ""
         continue-on-error: true
-
-      - name: Check for forbidden licenses (GPL, etc.)
-        run: |
-          echo "=========================================="
-          echo "⚖️  CHECKING FOR FORBIDDEN LICENSES..."
-          echo "=========================================="
-          licensecheck --strategy=REJECT:GPL
-          echo ""
-        continue-on-error: false
 
       - name: Generate licenses report (JSON)
         run: |
