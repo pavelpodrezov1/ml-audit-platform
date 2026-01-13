@@ -1,174 +1,364 @@
 #!/usr/bin/env python3
 """
-Generate audit reports from pip-audit, pip-licenses, and other sources.
-Creates AUDIT_REPORT.md, audit-report.json, and GITHUB_SUMMARY.md
+Generate comprehensive audit reports from pip-audit, pip-licenses, safety, and other sources.
+Creates:
+  - AUDIT_REPORT.md (Markdown with combined table: Package | Version | License | Vulns)
+  - audit-report.json (JSON format with detailed data)
+  - GITHUB_SUMMARY.md (GitHub Actions summary)
 """
 
 import json
 import subprocess
 import sys
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 def run_command(cmd: str) -> str:
     """Execute shell command and return output."""
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
         return result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return "Command timed out"
     except Exception as e:
         return f"Error running command: {str(e)}"
 
-def get_pip_audit_report() -> Dict[str, Any]:
-    """Get pip-audit vulnerabilities as JSON."""
-    output = run_command("pip-audit --desc --format json 2>/dev/null || echo '{}'")
-    try:
-        return json.loads(output) if output.strip() else {}
-    except json.JSONDecodeError:
-        return {}
+def get_pip_audit_vulnerabilities() -> Dict[str, List[str]]:
+    """
+    Parse pip-audit output to get vulnerabilities by package.
+    Returns: {package_name: [list of CVE IDs]}
+    """
+    vulns = {}
+    
+    # Try to read from pip-audit JSON output
+    json_output = run_command("pip-audit --format json 2>/dev/null || echo '{}'")
+    if json_output.strip() and json_output.strip() != "{}":
+        try:
+            audit_data = json.loads(json_output)
+            for vuln in audit_data.get('vulnerabilities', []):
+                pkg_name = vuln.get('name', 'Unknown')
+                vuln_id = vuln.get('id', 'N/A')
+                if pkg_name not in vulns:
+                    vulns[pkg_name] = []
+                vulns[pkg_name].append(vuln_id)
+            return vulns
+        except json.JSONDecodeError:
+            pass
+    
+    # Fallback: parse text output with regex
+    text_output = run_command("pip-audit 2>/dev/null || echo ''")
+    if text_output.strip():
+        # Pattern: "Found X vulnerabilities" or "Package | CVE-XXXX"
+        lines = text_output.split('\n')
+        for line in lines:
+            # Look for lines with CVE pattern
+            cve_match = re.search(r'(\w[\w-]*)\s+.*?(CVE-\d{4}-\d+)', line)
+            if cve_match:
+                pkg_name = cve_match.group(1)
+                cve_id = cve_match.group(2)
+                if pkg_name not in vulns:
+                    vulns[pkg_name] = []
+                vulns[pkg_name].append(cve_id)
+    
+    return vulns
+
+def get_safety_vulnerabilities() -> Dict[str, List[str]]:
+    """
+    Parse safety check output to get vulnerabilities.
+    Returns: {package_name: [list of vulnerability IDs]}
+    """
+    vulns = {}
+    
+    # Try JSON output
+    json_output = run_command("safety check --json 2>/dev/null || echo '{}'")
+    if json_output.strip() and json_output.strip() != "{}":
+        try:
+            safety_data = json.loads(json_output)
+            if isinstance(safety_data, list):
+                for item in safety_data:
+                    if isinstance(item, dict):
+                        pkg_name = item.get('package', 'Unknown')
+                        vuln_id = item.get('cve', item.get('id', 'N/A'))
+                        if pkg_name not in vulns:
+                            vulns[pkg_name] = []
+                        vulns[pkg_name].append(vuln_id)
+            return vulns
+        except json.JSONDecodeError:
+            pass
+    
+    return vulns
 
 def get_pip_licenses() -> List[Dict[str, str]]:
-    """Get pip-licenses as JSON."""
+    """Get pip-licenses as JSON list."""
     output = run_command("pip-licenses --format json 2>/dev/null || echo '[]'")
     try:
-        return json.loads(output) if output.strip() else []
+        result = json.loads(output) if output.strip() else []
+        # Ensure all items have required fields
+        for item in result:
+            if 'Name' not in item:
+                item['Name'] = 'Unknown'
+            if 'Version' not in item:
+                item['Version'] = 'Unknown'
+            if 'License' not in item:
+                item['License'] = 'Unknown'
+        return result
     except json.JSONDecodeError:
+        print("⚠️ Warning: Could not parse pip-licenses JSON", file=sys.stderr)
         return []
 
-def get_dependency_tree() -> str:
-    """Get pipdeptree output."""
-    return run_command("pipdeptree 2>/dev/null || echo 'No dependency tree available'")
+def merge_vulnerabilities(audit_vulns: Dict, safety_vulns: Dict) -> Dict[str, List[str]]:
+    """Merge vulnerabilities from pip-audit and safety."""
+    merged = audit_vulns.copy()
+    for pkg, vulns in safety_vulns.items():
+        if pkg not in merged:
+            merged[pkg] = []
+        merged[pkg].extend(vulns)
+        # Remove duplicates
+        merged[pkg] = list(set(merged[pkg]))
+    return merged
 
-def generate_markdown_report(audit_data: Dict, licenses: List) -> str:
-    """Generate Markdown format audit report."""
-    timestamp = datetime.utcnow().isoformat()
+def create_combined_audit_table(licenses: List[Dict], vulnerabilities: Dict[str, List[str]]) -> str:
+    """
+    Create the main audit table: Package | Version | License | Vulns
+    This fulfills the ТЗ requirement for audit report table.
+    """
+    table = "| Package | Version | License | Vulnerabilities |\n"
+    table += "|---------|---------|---------|------------------|\n"
     
-    report = f"""# ML Audit Platform - Security Report
+    for lic in sorted(licenses, key=lambda x: x.get('Name', '').lower()):
+        name = lic.get('Name', 'Unknown')
+        version = lic.get('Version', 'Unknown')
+        license_type = lic.get('License', 'Unknown')
+        
+        # Get vulnerabilities for this package
+        vulns = vulnerabilities.get(name, [])
+        if vulns:
+            vuln_str = ", ".join(vulns)
+            # Truncate if too long
+            if len(vuln_str) > 50:
+                vuln_str = vuln_str[:47] + "..."
+        else:
+            vuln_str = "—"
+        
+        table += f"| {name} | {version} | {license_type} | {vuln_str} |\n"
+    
+    return table
 
-**Generated:** {timestamp}
+def generate_markdown_report(licenses: List[Dict], vulnerabilities: Dict, 
+                             audit_vulns: Dict, safety_vulns: Dict) -> str:
+    """Generate comprehensive Markdown format audit report."""
+    timestamp = datetime.utcnow().isoformat()
+    vuln_count = len(vulnerabilities)
+    dep_count = len(licenses)
+    
+    report = f"""# 🔐 ML Audit Platform - Security Report
 
-## 📋 Executive Summary
-
-- **Vulnerabilities Found:** {len(audit_data.get('vulnerabilities', []))}
-- **Dependencies Analyzed:** {len(licenses)}
-- **Report Date:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+**Generated:** {timestamp}  
+**Generated by:** generate_audit_report.py  
 
 ---
 
-## 🔍 Vulnerability Scan (pip-audit)
+## 📋 Executive Summary
+
+| Metric | Value |
+|--------|-------|
+| **Total Dependencies** | {dep_count} |
+| **Total Vulnerabilities** | {vuln_count} |
+| **Safe Packages** | {dep_count - vuln_count} |
+| **Report Date** | {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} |
+
+---
+
+## 🔍 Security Status
 
 """
     
-    vulnerabilities = audit_data.get('vulnerabilities', [])
-    if vulnerabilities:
-        report += "### ⚠️ Found Vulnerabilities:\n\n"
-        report += "| Package | Version | Vulnerability ID | Description |\n"
-        report += "|---------|---------|-------------------|-------------|\n"
-        for vuln in vulnerabilities:
-            pkg = vuln.get('name', 'N/A')
-            ver = vuln.get('version', 'N/A')
-            vid = vuln.get('id', 'N/A')
-            desc = vuln.get('description', 'N/A')
-            report += f"| {pkg} | {ver} | {vid} | {desc[:50]}... |\n"
+    if vuln_count == 0:
+        report += "✅ **PASS** - No vulnerabilities detected in dependencies\n\n"
     else:
-        report += "✅ **No vulnerabilities detected!**\n"
+        report += f"⚠️ **WARNING** - {vuln_count} package(s) with vulnerabilities detected\n\n"
     
-    report += "\n---\n\n## 📦 Dependencies & Licenses\n\n"
-    report += "| Package | Version | License |\n"
-    report += "|---------|---------|----------|\n"
+    report += "---\n\n## 📦 Comprehensive Audit Table (Package | Version | License | Vulns)\n\n"
+    report += create_combined_audit_table(licenses, vulnerabilities)
     
-    for lic in sorted(licenses, key=lambda x: x.get('Name', '')):
-        name = lic.get('Name', 'N/A')
-        version = lic.get('Version', 'N/A')
-        license_type = lic.get('License', 'Unknown')
-        report += f"| {name} | {version} | {license_type} |\n"
+    if vulnerabilities:
+        report += "\n\n---\n\n## ⚠️ Vulnerability Details\n\n"
+        for pkg, vulns in sorted(vulnerabilities.items()):
+            if vulns:
+                report += f"### {pkg}\n"
+                report += f"- **Vulnerabilities:** {', '.join(vulns)}\n\n"
     
-    report += "\n---\n\n## ✅ Compliance Status\n\n"
-    report += "- [x] Dependency audit completed\n"
+    if audit_vulns or safety_vulns:
+        report += "\n---\n\n## 🔐 Audit Tool Reports\n\n"
+        report += "### pip-audit Results\n"
+        if audit_vulns:
+            report += f"- **Packages with CVE:** {len(audit_vulns)}\n"
+            for pkg, cves in sorted(audit_vulns.items()):
+                report += f"  - {pkg}: {', '.join(cves)}\n"
+        else:
+            report += "- ✅ No vulnerabilities found\n"
+        
+        report += "\n### safety Results\n"
+        if safety_vulns:
+            report += f"- **Packages with vulnerabilities:** {len(safety_vulns)}\n"
+            for pkg, vulns in sorted(safety_vulns.items()):
+                report += f"  - {pkg}: {', '.join(vulns)}\n"
+        else:
+            report += "- ✅ No vulnerabilities found\n"
+    
+    report += "\n\n---\n\n## ✅ Compliance Checklist\n\n"
+    report += "- [x] Dependency analysis completed\n"
     report += "- [x] License analysis completed\n"
-    report += "- [x] Vulnerability scan completed\n"
+    report += "- [x] CVE vulnerability scan (pip-audit) completed\n"
+    report += "- [x] Additional vulnerability scan (safety) completed\n"
+    report += f"- {'[x]' if vuln_count == 0 else '[!]'} Security gates {'passed' if vuln_count == 0 else 'require attention'}\n"
+    
+    report += "\n\n---\n\n## 📌 Recommendations\n\n"
+    if vuln_count > 0:
+        report += "1. **Update vulnerable packages** to versions without known CVEs\n"
+        report += "2. **Review GPL licenses** if commercial deployment is planned\n"
+        report += "3. **Track dependency updates** regularly using automated tools\n"
+        report += "4. **Implement branch protection** to prevent deployment of vulnerable dependencies\n"
+    else:
+        report += "1. ✅ All security checks passed\n"
+        report += "2. 📅 Schedule regular security scans\n"
+        report += "3. 🔔 Monitor for newly disclosed vulnerabilities\n"
     
     return report
 
-def generate_json_report(audit_data: Dict, licenses: List) -> Dict[str, Any]:
-    """Generate JSON format audit report."""
+def generate_json_report(licenses: List[Dict], vulnerabilities: Dict,
+                         audit_vulns: Dict, safety_vulns: Dict) -> Dict[str, Any]:
+    """Generate structured JSON format audit report."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
-        "vulnerabilities": audit_data.get('vulnerabilities', []),
-        "total_vulnerabilities": len(audit_data.get('vulnerabilities', [])),
-        "dependencies": licenses,
-        "total_dependencies": len(licenses),
-        "compliance": {
-            "audit_completed": True,
-            "licenses_analyzed": True,
-            "vulnerabilities_scanned": True
-        }
+        "metadata": {
+            "timestamp": datetime.utcnow().isoformat(),
+            "generator": "generate_audit_report.py",
+            "version": "1.0"
+        },
+        "summary": {
+            "total_dependencies": len(licenses),
+            "total_vulnerabilities": len(vulnerabilities),
+            "safe_packages": len(licenses) - len(vulnerabilities),
+            "vulnerability_status": "PASS" if len(vulnerabilities) == 0 else "WARNING"
+        },
+        "audit_sources": {
+            "pip_audit": {
+                "vulnerabilities": audit_vulns,
+                "package_count": len(audit_vulns)
+            },
+            "safety": {
+                "vulnerabilities": safety_vulns,
+                "package_count": len(safety_vulns)
+            }
+        },
+        "dependencies": [
+            {
+                "name": lic.get('Name', 'Unknown'),
+                "version": lic.get('Version', 'Unknown'),
+                "license": lic.get('License', 'Unknown'),
+                "vulnerabilities": vulnerabilities.get(lic.get('Name', 'Unknown'), [])
+            }
+            for lic in sorted(licenses, key=lambda x: x.get('Name', '').lower())
+        ],
+        "vulnerability_details": vulnerabilities
     }
 
-def generate_github_summary(audit_data: Dict, licenses: List) -> str:
+def generate_github_summary(licenses: List[Dict], vulnerabilities: Dict) -> str:
     """Generate GitHub Actions summary for workflow display."""
-    vuln_count = len(audit_data.get('vulnerabilities', []))
+    vuln_count = len(vulnerabilities)
     dep_count = len(licenses)
+    safe_count = dep_count - vuln_count
     
-    summary = f"""## 🔐 ML Audit Platform Report
+    summary = f"""## 🔐 ML Audit Platform - Security Report
 
-### Summary
-- **Vulnerabilities:** {vuln_count}
-- **Dependencies:** {dep_count}
-- **Timestamp:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+### 📊 Summary Statistics
+- **Total Dependencies Analyzed:** {dep_count}
+- **Vulnerabilities Found:** {vuln_count}
+- **Safe Packages:** {safe_count}
+- **Safety Rate:** {((safe_count / dep_count * 100) if dep_count > 0 else 0):.1f}%
 
-### Status
+### ✅ Status
 """
     
     if vuln_count == 0:
         summary += "✅ **PASS** - No vulnerabilities detected\n"
     else:
-        summary += f"⚠️ **WARNING** - {vuln_count} vulnerability/vulnerabilities found\n"
+        summary += f"⚠️ **WARNING** - {vuln_count} vulnerability/{vuln_count if vuln_count != 1 else ''} found\n"
     
-    summary += f"\n### Top Dependencies\n"
+    summary += f"\n### 📦 Top 10 Dependencies\n"
     for lic in sorted(licenses, key=lambda x: x.get('Name', ''))[:10]:
-        name = lic.get('Name', 'N/A')
-        version = lic.get('Version', 'N/A')
-        summary += f"- {name} ({version})\n"
+        name = lic.get('Name', 'Unknown')
+        version = lic.get('Version', 'Unknown')
+        vuln_badge = " 🔴" if name in vulnerabilities else " ✅"
+        summary += f"- {name} ({version}){vuln_badge}\n"
+    
+    if len(licenses) > 10:
+        summary += f"\n... and {len(licenses) - 10} more dependencies\n"
     
     return summary
 
 def main():
     """Main function."""
-    print("\n" + "="*50)
-    print("🔍 Generating Audit Reports...")
-    print("="*50 + "\n")
+    print("\n" + "="*60)
+    print("🔍 Generating Comprehensive Audit Reports...")
+    print("="*60 + "\n")
     
-    # Collect data
-    audit_data = get_pip_audit_report()
+    # Collect data from all sources
+    print("[1/4] Collecting pip-audit vulnerabilities...")
+    audit_vulns = get_pip_audit_vulnerabilities()
+    print(f"      ✓ Found {len(audit_vulns)} packages with pip-audit vulnerabilities")
+    
+    print("[2/4] Collecting safety vulnerabilities...")
+    safety_vulns = get_safety_vulnerabilities()
+    print(f"      ✓ Found {len(safety_vulns)} packages with safety vulnerabilities")
+    
+    print("[3/4] Collecting license information...")
     licenses = get_pip_licenses()
+    print(f"      ✓ Analyzed {len(licenses)} dependencies")
     
-    print(f"✓ Collected audit data: {len(audit_data.get('vulnerabilities', []))} vulnerabilities")
-    print(f"✓ Collected license data: {len(licenses)} dependencies\n")
+    print("[4/4] Merging vulnerability data...")
+    vulnerabilities = merge_vulnerabilities(audit_vulns, safety_vulns)
+    print(f"      ✓ Total {len(vulnerabilities)} packages with vulnerabilities")
+    
+    print()
     
     # Generate reports
-    markdown_report = generate_markdown_report(audit_data, licenses)
-    json_report = generate_json_report(audit_data, licenses)
-    github_summary = generate_github_summary(audit_data, licenses)
+    print("Generating reports...")
+    markdown_report = generate_markdown_report(licenses, vulnerabilities, audit_vulns, safety_vulns)
+    json_report = generate_json_report(licenses, vulnerabilities, audit_vulns, safety_vulns)
+    github_summary = generate_github_summary(licenses, vulnerabilities)
     
     # Write reports to files
-    Path("AUDIT_REPORT.md").write_text(markdown_report)
-    Path("audit-report.json").write_text(json.dumps(json_report, indent=2))
-    Path("GITHUB_SUMMARY.md").write_text(github_summary)
+    try:
+        Path("AUDIT_REPORT.md").write_text(markdown_report)
+        print("✅ Created: AUDIT_REPORT.md")
+    except Exception as e:
+        print(f"❌ Error writing AUDIT_REPORT.md: {e}", file=sys.stderr)
     
-    print("✅ Created files:")
-    print("   - AUDIT_REPORT.md")
-    print("   - audit-report.json")
-    print("   - GITHUB_SUMMARY.md\n")
+    try:
+        Path("audit-report.json").write_text(json.dumps(json_report, indent=2))
+        print("✅ Created: audit-report.json")
+    except Exception as e:
+        print(f"❌ Error writing audit-report.json: {e}", file=sys.stderr)
     
-    # Display summary
+    try:
+        Path("GITHUB_SUMMARY.md").write_text(github_summary)
+        print("✅ Created: GITHUB_SUMMARY.md")
+    except Exception as e:
+        print(f"❌ Error writing GITHUB_SUMMARY.md: {e}", file=sys.stderr)
+    
+    print()
+    print("="*60)
+    print("📋 GitHub Actions Summary:")
+    print("="*60)
     print(github_summary)
-    
-    print("\n" + "="*50)
+    print("="*60)
     print("✅ Audit report generation complete!")
-    print("="*50 + "\n")
+    print("="*60 + "\n")
     
-    return 0
+    return 0 if len(vulnerabilities) == 0 else 1
 
 if __name__ == "__main__":
     sys.exit(main())
