@@ -6,6 +6,7 @@ on:
     paths:
       - "requirements.txt"
       - ".github/workflows/3-config-enterprise.yml"
+      - "generate_audit_report.py"
   pull_request:
     branches: [main]
 
@@ -23,11 +24,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install all dependencies and tools
+      - name: Install audit tools first
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install pip-audit pip-licenses pipdeptree
+        continue-on-error: false
+
+      - name: Install project dependencies
+        run: |
+          pip install -r requirements.txt
         continue-on-error: false
 
       - name: Full Audit Report (with descriptions)
@@ -72,7 +77,11 @@ jobs:
         continue-on-error: false
 
       - name: Generate Audit Report
-        run: python generate_audit_report.py
+        run: |
+          echo "Running generate_audit_report.py..."
+          python generate_audit_report.py
+          echo "Checking if files were created..."
+          ls -la AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Build multi-stage Docker
