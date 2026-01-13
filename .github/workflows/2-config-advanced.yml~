@@ -7,8 +7,6 @@ on:
       - "requirements.txt"
       - "pyproject.toml"
       - "poetry.lock"
-      - "Pipfile"
-      - "Pipfile.lock"
       - "train_model.py"
       - "save_model.py"
       - ".github/workflows/2-config-advanced.yml"
@@ -35,15 +33,12 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
 
-      - name: Detect dependency manager (pip/poetry/pipenv)
+      - name: Detect dependency manager (pip/poetry)
         id: detect-manager
         run: |
           if [ -f "pyproject.toml" ]; then
             echo "manager=poetry" >> $GITHUB_OUTPUT
             echo "📦 Detected: Poetry (pyproject.toml)"
-          elif [ -f "Pipfile" ]; then
-            echo "manager=pipenv" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Pipenv (Pipfile)"
           else
             echo "manager=pip" >> $GITHUB_OUTPUT
             echo "📦 Detected: pip (requirements.txt)"
@@ -56,22 +51,17 @@ jobs:
           poetry config virtualenvs.in-project true
           poetry install --no-interaction
 
-      - name: Install Pipenv (if using Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          python -m pip install --upgrade pip pipenv
-          pipenv install --dev
-
-      - name: Install audit tools first
-        run: |
-          python -m pip install --upgrade pip
-          pip install safety licensecheck pipdeptree pip-licenses
-        continue-on-error: false
-
       - name: Install project dependencies (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
+        continue-on-error: false
+
+      - name: Install audit tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety licensecheck pipdeptree pip-licenses
         continue-on-error: false
 
       - name: Clean up old packages
@@ -79,7 +69,6 @@ jobs:
           echo "=========================================="
           echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
           echo "=========================================="
-          # Remove packages that are no longer in requirements.txt
           pip uninstall -y text-unidecode 2>/dev/null || true
           echo "✅ Cleanup completed"
         continue-on-error: true
@@ -113,7 +102,6 @@ jobs:
           echo "=========================================="
           licensecheck --zero
           
-          # Check for GPL licenses in currently installed packages
           if pip-licenses | grep -i "gpl"; then
             echo "❌ GPL license detected!"
             exit 1
@@ -151,15 +139,7 @@ jobs:
           echo "=========================================="
           poetry export -f requirements.txt --output poetry-requirements.txt
           echo "✅ Poetry lock-file exported"
-
-      - name: Export Pipenv lock-file (if using Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📌 PIPENV LOCK-FILE"
-          echo "=========================================="
-          pipenv lock -r > pipenv-requirements.txt
-          echo "✅ Pipenv lock-file exported"
+        continue-on-error: true
 
       - name: Generate Audit Report
         run: |
@@ -253,14 +233,12 @@ jobs:
             advanced-licenses.json
           if-no-files-found: warn
 
-      - name: Upload dependency manager exports
+      - name: Upload Poetry lock-file export
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-manager-exports
-          path: |
-            poetry-requirements.txt
-            pipenv-requirements.txt
+          path: poetry-requirements.txt
           if-no-files-found: ignore
 
       - name: Upload Audit Reports
