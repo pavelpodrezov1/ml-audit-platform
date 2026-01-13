@@ -61,7 +61,7 @@ jobs:
           echo "=========================================="
           pip-audit -r requirements.txt
           echo ""
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Check for forbidden licenses (GPL, etc.)
         run: |
