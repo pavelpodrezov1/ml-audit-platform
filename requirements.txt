@@ -1,3 +1,5 @@
+flask==2.3.0
+
 # ========== CORE ML PACKAGES (SAFE VERSIONS) ==========
 fastapi==0.124.2
 scikit-learn==1.8.0
@@ -18,7 +20,7 @@ typing-extensions==4.15.0
 annotated-types==0.7.0
 
 # ========== HTTP CLIENTS ==========
-requests==2.32.3
+requests==2.32.4
 httpx==0.28.1
 certifi==2025.11.12
 charset-normalizer==3.4.4
