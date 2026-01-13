@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "requirements.txt"
+      - "train_model.py"
+      - "save_model.py"
       - ".github/workflows/3-config-enterprise.yml"
       - "generate_audit_report.py"
       - "Dockerfile"
@@ -38,6 +40,18 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r requirements.txt
+        continue-on-error: false
+
+      - name: Train ML Model
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic)..."
+          echo "=========================================="
+          python save_model.py
+          echo ""
+          echo "✅ Model training completed"
+          echo "Generated artifacts:"
+          ls -lh models/
         continue-on-error: false
 
       - name: Full Audit Report (with descriptions)
@@ -143,6 +157,14 @@ jobs:
           zip -r enterprise-audit-reports.zip enterprise-reports/
           ls -la enterprise-audit-reports.zip
         continue-on-error: true
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config3
+          path: models/
+          if-no-files-found: warn
 
       - name: Upload enterprise reports
         uses: actions/upload-artifact@v4

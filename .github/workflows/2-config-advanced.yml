@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "requirements.txt"
+      - "train_model.py"
+      - "save_model.py"
       - ".github/workflows/2-config-advanced.yml"
       - "generate_audit_report.py"
       - "Dockerfile"
@@ -38,6 +40,18 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r requirements.txt
+        continue-on-error: false
+
+      - name: Train ML Model
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic)..."
+          echo "=========================================="
+          python save_model.py
+          echo ""
+          echo "✅ Model training completed"
+          echo "Generated artifacts:"
+          ls -lh models/
         continue-on-error: false
 
       - name: Run safety check (Advanced CVE scanning)
@@ -126,6 +140,14 @@ jobs:
           echo "✅ Advanced API tests passed"
           docker stop test-api-adv || true
         continue-on-error: true
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config2
+          path: models/
+          if-no-files-found: warn
 
       - name: Upload advanced reports
         uses: actions/upload-artifact@v4

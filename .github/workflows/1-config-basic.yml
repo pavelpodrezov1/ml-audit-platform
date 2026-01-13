@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "requirements.txt"
+      - "train_model.py"
+      - "save_model.py"
       - ".github/workflows/1-config-basic.yml"
       - "generate_audit_report.py"
       - "Dockerfile"
@@ -38,6 +40,18 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r requirements.txt
+        continue-on-error: false
+
+      - name: Train ML Model
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic)..."
+          echo "=========================================="
+          python save_model.py
+          echo ""
+          echo "✅ Model training completed"
+          echo "Generated artifacts:"
+          ls -lh models/
         continue-on-error: false
 
       - name: Run pip-audit (CVE scanning)
@@ -108,6 +122,14 @@ jobs:
           echo "API Health Check Passed ✅"
           docker stop test-api || true
         continue-on-error: true
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config1
+          path: models/
+          if-no-files-found: warn
 
       - name: Upload licenses report
         uses: actions/upload-artifact@v4
