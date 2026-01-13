@@ -47,7 +47,6 @@ jobs:
           echo "=========================================="
           echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
           echo "=========================================="
-          # Remove packages that are no longer in requirements.txt
           pip uninstall -y text-unidecode 2>/dev/null || true
           echo "✅ Cleanup completed"
         continue-on-error: true
@@ -82,6 +81,20 @@ jobs:
           pip-licenses
           echo ""
           echo "✅ Licenses exported to basic-licenses.json"
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (GPL gate - Basic PoC)
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
+          echo "=========================================="
+          if pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            echo "⚠️  This basic config fails on GPL licenses to demonstrate compliance checking"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
         continue-on-error: false
 
       - name: Generate Audit Report
