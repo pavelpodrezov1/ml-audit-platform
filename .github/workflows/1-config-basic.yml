@@ -34,7 +34,7 @@ jobs:
       - name: Install audit tools first
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit pip-licenses
+          pip install pip-audit pip-licenses licensecheck
         continue-on-error: false
 
       - name: Install project dependencies
@@ -59,23 +59,23 @@ jobs:
           echo "=========================================="
           echo "🔍 SCANNING FOR VULNERABILITIES..."
           echo "=========================================="
-          pip-audit -r requirements.txt || echo "Vulnerabilities found - check above"
+          pip-audit -r requirements.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
-      - name: Generate SBOM (Software Bill of Materials)
+      - name: Check for forbidden licenses (GPL, etc.)
         run: |
           echo "=========================================="
-          echo "📋 GENERATING SBOM (JSON)"
+          echo "⚖️  CHECKING FOR FORBIDDEN LICENSES..."
           echo "=========================================="
-          pip-licenses --format=json > basic-sbom.json
-          echo "✅ SBOM generated: basic-sbom.json"
+          licensecheck --strategy=REJECT:GPL
+          echo ""
         continue-on-error: false
 
       - name: Generate licenses report (JSON)
         run: |
           echo "=========================================="
-          echo "📜 CHECKING LICENSES..."
+          echo "📜 GENERATING LICENSES REPORT..."
           echo "=========================================="
           pip-licenses --format=json > basic-licenses.json
           pip-licenses
@@ -137,14 +137,6 @@ jobs:
         with:
           name: basic-licenses-report
           path: basic-licenses.json
-          if-no-files-found: warn
-
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: basic-sbom-report
-          path: basic-sbom.json
           if-no-files-found: warn
 
       - name: Upload Audit Reports

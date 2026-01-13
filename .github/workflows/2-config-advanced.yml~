@@ -1,0 +1,172 @@
+name: Config 2 - Advanced CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requirements.txt"
+      - "train_model.py"
+      - "save_model.py"
+      - ".github/workflows/2-config-advanced.yml"
+      - "generate_audit_report.py"
+      - "Dockerfile"
+  pull_request:
+    branches: [main]
+
+jobs:
+  advanced-scan:
+    runs-on: ubuntu-latest
+    name: "Audit: Advanced Config (safety + licensecheck + pipdeptree)"
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install audit tools first
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety licensecheck pipdeptree pip-licenses
+        continue-on-error: false
+
+      - name: Install project dependencies
+        run: |
+          pip install -r requirements.txt
+        continue-on-error: false
+
+      - name: Train ML Model
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic)..."
+          echo "=========================================="
+          python save_model.py
+          echo ""
+          echo "✅ Model training completed"
+          echo "Generated artifacts:"
+          ls -lh models/
+        continue-on-error: false
+
+      - name: Run safety check (Advanced CVE scanning)
+        run: |
+          echo "=========================================="
+          echo "🔐 RUNNING SAFETY SCAN (Advanced)..."
+          echo "=========================================="
+          safety check --json > advanced-safety-report.json
+          cat advanced-safety-report.json
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (GPL strategy)
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
+          echo "=========================================="
+          licensecheck --strategy=REJECT:GPL
+          echo ""
+        continue-on-error: false
+
+      - name: Generate dependency tree analysis
+        run: |
+          echo "=========================================="
+          echo "🧪 DEPENDENCY TREE ANALYSIS"
+          echo "=========================================="
+          pipdeptree > advanced-dependency-tree.txt
+          cat advanced-dependency-tree.txt
+          echo ""
+        continue-on-error: false
+
+      - name: Generate licenses report (JSON)
+        run: |
+          echo "=========================================="
+          echo "📜 GENERATING LICENSES REPORT..."
+          echo "=========================================="
+          pip-licenses --format=json > advanced-licenses.json
+          pip-licenses
+          echo ""
+          echo "✅ Licenses exported to advanced-licenses.json"
+        continue-on-error: false
+
+      - name: Generate Audit Report
+        run: |
+          echo "Running generate_audit_report.py..."
+          python generate_audit_report.py
+          echo "Checking if files were created..."
+          ls -la AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
+        continue-on-error: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ml-api:advanced-latest
+            ghcr.io/${{ github.repository }}/ml-api:advanced-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-adv
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Advanced API tests
+        run: |
+          docker run -d -p 8000:8000 --name test-api-adv ghcr.io/${{ github.repository }}/ml-api:advanced-latest
+          sleep 4
+          echo "Testing /health endpoint..."
+          curl -X GET http://localhost:8000/health -H "Content-Type: application/json"
+          echo ""
+          echo "Testing /predict endpoint..."
+          curl -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}'
+          echo ""
+          echo "✅ Advanced API tests passed"
+          docker stop test-api-adv || true
+        continue-on-error: true
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config2
+          path: models/
+          if-no-files-found: warn
+
+      - name: Upload advanced audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: advanced-audit-reports
+          path: |
+            advanced-safety-report.json
+            advanced-dependency-tree.txt
+            advanced-licenses.json
+          if-no-files-found: warn
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports-config2
+          path: |
+            AUDIT_REPORT.md
+            audit-report.json
+            GITHUB_SUMMARY.md
+          if-no-files-found: warn
+
