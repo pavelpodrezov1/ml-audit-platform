@@ -13,7 +13,7 @@ jobs:
   enterprise-full-audit:
     runs-on: ubuntu-latest
     name: "Audit: Enterprise Config (SBOM + Full Reports)"
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pip-audit pip-licenses pipdeptree
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Full Audit Report (with descriptions)
         run: |
@@ -49,7 +49,7 @@ jobs:
           cat enterprise-sbom.json
           echo ""
           echo "✅ SBOM generated: enterprise-sbom.json"
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Full dependency tree analysis
         run: |
@@ -59,7 +59,7 @@ jobs:
           pipdeptree > enterprise-dependency-tree.txt
           cat enterprise-dependency-tree.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Version inventory
         run: |
@@ -69,11 +69,11 @@ jobs:
           pip list > enterprise-versions.txt
           cat enterprise-versions.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate Audit Report
         run: python generate_audit_report.py
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Build multi-stage Docker
         run: |
@@ -81,8 +81,7 @@ jobs:
             --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
             --build-arg VCS_REF=$(git rev-parse --short HEAD) \
             -t ml-api:enterprise-latest \
-            -t ml-api:enterprise-$(git rev-parse --short HEAD) \
-            .
+            -t ml-api:enterprise-$(git rev-parse --short HEAD) .
           docker images | grep ml-api
         continue-on-error: true
 
@@ -90,27 +89,22 @@ jobs:
         run: |
           docker run -d -p 8000:8000 --name test-api-ent ml-api:enterprise-latest
           sleep 4
-          
           echo "Testing /health endpoint..."
           curl -X GET http://localhost:8000/health
-          
           echo ""
           echo "Testing /predict with various scenarios..."
-          
           echo "Scenario 1: Survived passenger"
           curl -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 1, "sex": 1, "age": 25, "sibsp": 1, "parch": 0, "fare": 100, "embarked": 2}'
-          
           echo ""
           echo "Scenario 2: Different passenger"
           curl -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 3, "sex": 0, "age": 35, "sibsp": 0, "parch": 0, "fare": 15, "embarked": 0}'
-          
           echo ""
           echo "✅ Comprehensive API tests passed"
-          docker stop test-api-ent
+          docker stop test-api-ent || true
         continue-on-error: true
 
       - name: Create artifacts ZIP
@@ -120,7 +114,6 @@ jobs:
           cp enterprise-sbom.json enterprise-reports/
           cp enterprise-dependency-tree.txt enterprise-reports/
           cp enterprise-versions.txt enterprise-reports/
-          
           zip -r enterprise-audit-reports.zip enterprise-reports/
           ls -la enterprise-audit-reports.zip
         continue-on-error: true
@@ -136,6 +129,7 @@ jobs:
             enterprise-dependency-tree.txt
             enterprise-versions.txt
             enterprise-audit-reports.zip
+          if-no-files-found: warn
 
       - name: Upload Audit Reports
         if: always()
@@ -146,4 +140,5 @@ jobs:
             AUDIT_REPORT.md
             audit-report.json
             GITHUB_SUMMARY.md
+          if-no-files-found: warn
 

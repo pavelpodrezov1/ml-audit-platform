@@ -13,7 +13,7 @@ jobs:
   advanced-scan:
     runs-on: ubuntu-latest
     name: "Audit: Advanced Config (safety + licensecheck + pipdeptree)"
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install safety licensecheck pipdeptree
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Run safety check (Advanced CVE scanning)
         run: |
@@ -49,7 +49,7 @@ jobs:
           licensecheck --zero --ignore-packages ml-audit-platform || true
           echo ""
           echo "✅ License strategy check passed"
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate dependency tree
         run: |
@@ -59,11 +59,11 @@ jobs:
           pipdeptree > advanced-dependency-tree.txt 2>&1
           cat advanced-dependency-tree.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate Audit Report
         run: python generate_audit_report.py
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Build and tag Docker image
         run: |
@@ -76,20 +76,17 @@ jobs:
         run: |
           docker run -d -p 8000:8000 --name test-api-adv ml-api:advanced-ci-latest
           sleep 4
-          
           echo "Testing /health endpoint..."
           curl -X GET http://localhost:8000/health -H "Content-Type: application/json"
-          
           echo ""
           echo "Testing /predict endpoint..."
           curl -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}' \
             || echo "Prediction failed"
-          
           echo ""
           echo "✅ Advanced API tests passed"
-          docker stop test-api-adv
+          docker stop test-api-adv || true
         continue-on-error: true
 
       - name: Upload advanced reports
@@ -100,6 +97,7 @@ jobs:
           path: |
             advanced-safety-report.json
             advanced-dependency-tree.txt
+          if-no-files-found: warn
 
       - name: Upload Audit Reports
         if: always()
@@ -110,4 +108,5 @@ jobs:
             AUDIT_REPORT.md
             audit-report.json
             GITHUB_SUMMARY.md
+          if-no-files-found: warn
 
