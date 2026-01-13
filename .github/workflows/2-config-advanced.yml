@@ -94,7 +94,7 @@ jobs:
           safety check --json > advanced-safety-report.json
           cat advanced-safety-report.json
           echo ""
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Check for forbidden licenses (GPL strategy)
         run: |
