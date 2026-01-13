@@ -61,7 +61,6 @@ pytz==2025.2
 tzdata==2025.2
 python-dateutil==2.9.0.post0
 python-slugify==8.0.4
-text-unidecode==1.3
 bleach==6.3.0
 
 # ========== DEVELOPMENT & TESTING ==========

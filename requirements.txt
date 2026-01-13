@@ -74,7 +74,6 @@ pip-audit==2.10.0
 safety==3.7.0
 pip-licenses==5.5.0
 pipdeptree==2.30.0
-licensecheck==2025.1.0
 
 # ========== DATA SCIENCE INTEGRATIONS ==========
 kaggle==1.6.14
