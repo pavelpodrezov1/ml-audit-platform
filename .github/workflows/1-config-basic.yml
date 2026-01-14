@@ -102,7 +102,7 @@ jobs:
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
           echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
+          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Set up Docker Buildx
@@ -201,6 +201,8 @@ jobs:
           name: audit-reports-config1
           path: |
             AUDIT_REPORT.md
+            AUDIT_TABLE.md
+            AUDIT_TABLE.json
             audit-report.json
             GITHUB_SUMMARY.md
           if-no-files-found: warn

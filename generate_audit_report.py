@@ -4,6 +4,8 @@ Generate comprehensive audit reports from pip-audit, pip-licenses, safety, and o
 Creates:
   - AUDIT_REPORT.md (Markdown with combined table: Package | Version | License | Vulns)
   - audit-report.json (JSON format with detailed data)
+  - AUDIT_TABLE.md (Standalone audit table in Markdown)
+  - AUDIT_TABLE.json (Standalone audit table in JSON)
   - GITHUB_SUMMARY.md (GitHub Actions summary)
 """
 
@@ -122,7 +124,7 @@ def merge_vulnerabilities(audit_vulns: Dict, safety_vulns: Dict) -> Dict[str, Li
 def create_combined_audit_table(licenses: List[Dict], vulnerabilities: Dict[str, List[str]]) -> str:
     """
     Create the main audit table: Package | Version | License | Vulns
-    This fulfills the ТЗ requirement for audit report table.
+    This fulfills the requirement for audit report table.
     """
     table = "| Package | Version | License | Vulnerabilities |\n"
     table += "|---------|---------|---------|------------------|\n"
@@ -143,6 +145,27 @@ def create_combined_audit_table(licenses: List[Dict], vulnerabilities: Dict[str,
             vuln_str = "—"
         
         table += f"| {name} | {version} | {license_type} | {vuln_str} |\n"
+    
+    return table
+
+def create_audit_table_json(licenses: List[Dict], vulnerabilities: Dict[str, List[str]]) -> List[Dict]:
+    """
+    Create the audit table in JSON format: Package | Version | License | Vulns
+    """
+    table = []
+    
+    for lic in sorted(licenses, key=lambda x: x.get('Name', '').lower()):
+        name = lic.get('Name', 'Unknown')
+        version = lic.get('Version', 'Unknown')
+        license_type = lic.get('License', 'Unknown')
+        vulns = vulnerabilities.get(name, [])
+        
+        table.append({
+            "Package": name,
+            "Version": version,
+            "License": license_type,
+            "Vulnerabilities": vulns if vulns else []
+        })
     
     return table
 
@@ -172,7 +195,6 @@ def generate_markdown_report(licenses: List[Dict], vulnerabilities: Dict,
 ---
 
 ## 🔍 Security Status
-
 """
     
     if vuln_count == 0:
@@ -285,7 +307,7 @@ def generate_github_summary(licenses: List[Dict], vulnerabilities: Dict) -> str:
     if vuln_count == 0:
         summary += "✅ **PASS** - No vulnerabilities detected\n"
     else:
-        summary += f"⚠️ **WARNING** - {vuln_count} vulnerability/{vuln_count if vuln_count != 1 else ''} found\n"
+        summary += f"⚠️ **WARNING** - {vuln_count} vulnerability/{'ies' if vuln_count != 1 else ''} found\n"
     
     summary += f"\n### 📦 Top 10 Dependencies\n"
     for lic in sorted(licenses, key=lambda x: x.get('Name', ''))[:10]:
@@ -330,6 +352,21 @@ def main():
     json_report = generate_json_report(licenses, vulnerabilities, audit_vulns, safety_vulns)
     github_summary = generate_github_summary(licenses, vulnerabilities)
     
+    # Generate standalone audit table (Markdown)
+    audit_table_md = "# 📋 Audit Table (Package | Version | License | Vulnerabilities)\n\n"
+    audit_table_md += f"**Generated:** {datetime.utcnow().isoformat()}\n\n"
+    audit_table_md += create_combined_audit_table(licenses, vulnerabilities)
+    
+    # Generate standalone audit table (JSON)
+    audit_table_json_data = {
+        "metadata": {
+            "timestamp": datetime.utcnow().isoformat(),
+            "total_packages": len(licenses),
+            "vulnerable_packages": len(vulnerabilities)
+        },
+        "table": create_audit_table_json(licenses, vulnerabilities)
+    }
+    
     # Write reports to files
     try:
         Path("AUDIT_REPORT.md").write_text(markdown_report)
@@ -342,6 +379,20 @@ def main():
         print("✅ Created: audit-report.json")
     except Exception as e:
         print(f"❌ Error writing audit-report.json: {e}", file=sys.stderr)
+    
+    # Write audit table (Markdown)
+    try:
+        Path("AUDIT_TABLE.md").write_text(audit_table_md)
+        print("✅ Created: AUDIT_TABLE.md")
+    except Exception as e:
+        print(f"❌ Error writing AUDIT_TABLE.md: {e}", file=sys.stderr)
+    
+    # Write audit table (JSON)
+    try:
+        Path("AUDIT_TABLE.json").write_text(json.dumps(audit_table_json_data, indent=2))
+        print("✅ Created: AUDIT_TABLE.json")
+    except Exception as e:
+        print(f"❌ Error writing AUDIT_TABLE.json: {e}", file=sys.stderr)
     
     try:
         Path("GITHUB_SUMMARY.md").write_text(github_summary)
@@ -362,4 +413,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
