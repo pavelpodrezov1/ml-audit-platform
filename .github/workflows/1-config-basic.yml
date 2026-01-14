@@ -1,4 +1,4 @@
-name: Config 1 - Basic - FIXED
+name: Config 1 - Basic - FIXED (CORRECTED)
 
 on:
   push:
@@ -75,9 +75,10 @@ jobs:
               cat basic-audit.txt
               exit 1
             fi
+            echo "✅ No critical vulnerabilities detected"
+          else
+            echo "⚠️  Audit file not found, but continuing..."
           fi
-          
-          echo "✅ No critical vulnerabilities detected"
         continue-on-error: false
 
       - name: Upload Audit Reports
