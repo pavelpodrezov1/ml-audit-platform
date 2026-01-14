@@ -18,7 +18,7 @@ on:
 jobs:
   enterprise-full-audit:
     runs-on: ubuntu-latest
-    name: "Audit: Config 3 - pip-audit + cyclonedx-bom ONLY"
+    name: "Audit: Config 3 - pip-audit + pip-licenses ONLY"
     permissions:
       contents: read
       packages: write
@@ -39,10 +39,10 @@ jobs:
           pip install -r requirements.txt
         continue-on-error: false
 
-      - name: Install ONLY pip-audit and cyclonedx-bom
+      - name: Install ONLY pip-audit
         run: |
-          pip install pip-audit cyclonedx-bom
-          echo "✅ Installed: pip-audit, cyclonedx-bom"
+          pip install pip-audit
+          echo "✅ Installed: pip-audit"
         continue-on-error: false
 
       - name: Train ML Model
@@ -61,19 +61,6 @@ jobs:
           echo "=========================================="
           pip-audit --desc > enterprise-audit-full.txt 2>&1
           cat enterprise-audit-full.txt
-          echo ""
-        continue-on-error: false
-
-      - name: Generate SBOM (Software Bill of Materials) in CycloneDX format
-        run: |
-          echo "=========================================="
-          echo "📋 GENERATING SBOM (CycloneDX)..."
-          echo "=========================================="
-          cyclonedx-bom -o enterprise-sbom.json
-          echo "✅ SBOM generated: enterprise-sbom.json"
-          echo ""
-          echo "First 50 lines of SBOM:"
-          head -50 enterprise-sbom.json
           echo ""
         continue-on-error: false
 
@@ -102,7 +89,6 @@ jobs:
           echo "=========================================="
           mkdir -p enterprise-reports
           cp enterprise-audit-full.txt enterprise-reports/ 2>/dev/null || true
-          cp enterprise-sbom.json enterprise-reports/ 2>/dev/null || true
           cp enterprise-versions.txt enterprise-reports/ 2>/dev/null || true
           cp AUDIT_REPORT.md enterprise-reports/ 2>/dev/null || true
           cp AUDIT_TABLE.md enterprise-reports/ 2>/dev/null || true
@@ -203,14 +189,6 @@ jobs:
         with:
           name: model-artifacts-config3
           path: models/
-          if-no-files-found: warn
-
-      - name: Upload enterprise SBOM
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: enterprise-sbom
-          path: enterprise-sbom.json
           if-no-files-found: warn
 
       - name: Upload enterprise full audit reports
