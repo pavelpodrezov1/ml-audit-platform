@@ -1,0 +1,232 @@
+name: Config 2 - Advanced - FIXED
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "Pipfile"
+      - "Pipfile.lock"
+      - "train_model.py"
+      - "save_model.py"
+      - ".github/workflows/2-config-advanced.yml"
+      - "generate_audit_report.py"
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  advanced-audit:
+    runs-on: ubuntu-latest
+    name: "Audit: Advanced Config (pip-audit + safety + licensecheck)"
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Detect dependency manager (pip/poetry/pipenv)
+        id: detect-manager
+        run: |
+          if [ -f "pyproject.toml" ]; then
+            echo "manager=poetry" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Poetry (pyproject.toml)"
+          elif [ -f "Pipfile" ]; then
+            echo "manager=pipenv" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Pipenv (Pipfile)"
+          else
+            echo "manager=pip" >> $GITHUB_OUTPUT
+            echo "📦 Detected: pip (requirements.txt)"
+          fi
+
+      - name: Install Poetry (if using Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+          poetry install --no-interaction --only dev
+
+      - name: Install Pipenv (if using Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          python -m pip install --upgrade pip pipenv
+          pipenv install
+          pipenv install --dev
+
+      - name: Install project dependencies (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit safety licensecheck pipdeptree pip-licenses
+
+      - name: Train ML Model (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via pip..."
+          echo "=========================================="
+          python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Train ML Model (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via Poetry..."
+          echo "=========================================="
+          poetry run python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Train ML Model (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via Pipenv..."
+          echo "=========================================="
+          pipenv run python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Run pip-audit - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🔍 ADVANCED AUDIT REPORT (pip-audit)..."
+          echo "=========================================="
+          pip-audit --desc > advanced-audit-pip.txt 2>&1 || true
+          cat advanced-audit-pip.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Run pip-audit (Poetry) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🔍 ADVANCED AUDIT REPORT (pip-audit via Poetry)..."
+          echo "=========================================="
+          poetry run pip-audit --desc > advanced-audit-pip.txt 2>&1 || true
+          cat advanced-audit-pip.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Run pip-audit (Pipenv) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🔍 ADVANCED AUDIT REPORT (pip-audit via Pipenv)..."
+          echo "=========================================="
+          pipenv run pip-audit --desc > advanced-audit-pip.txt 2>&1 || true
+          cat advanced-audit-pip.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Run safety check - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🛡️  SAFETY CHECK (security-db)..."
+          echo "=========================================="
+          safety check --json > advanced-audit-safety.json 2>&1 || true
+          cat advanced-audit-safety.json
+          echo ""
+        continue-on-error: true
+
+      - name: Run safety check (Poetry) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🛡️  SAFETY CHECK (Poetry)..."
+          echo "=========================================="
+          poetry run safety check --json > advanced-audit-safety.json 2>&1 || true
+          cat advanced-audit-safety.json
+          echo ""
+        continue-on-error: true
+
+      - name: Run safety check (Pipenv) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🛡️  SAFETY CHECK (Pipenv)..."
+          echo "=========================================="
+          pipenv run safety check --json > advanced-audit-safety.json 2>&1 || true
+          cat advanced-audit-safety.json
+          echo ""
+        continue-on-error: true
+
+      - name: Generate Audit Report (ALWAYS, even if vulnerabilities found)
+        run: |
+          echo "Running generate_audit_report.py..."
+          python generate_audit_report.py
+          echo "Checking if files were created..."
+          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
+        continue-on-error: true
+
+      - name: Check for CVE vulnerabilities - FAIL IF FOUND
+        run: |
+          echo "=========================================="
+          echo "🚨 CHECKING FOR VULNERABILITIES..."
+          echo "=========================================="
+          
+          FOUND_VULNERABILITIES=0
+          
+          if [ -f "advanced-audit-pip.txt" ]; then
+            echo "Checking pip-audit results..."
+            if grep -q "Found.*vulnerabilities" advanced-audit-pip.txt; then
+              echo "❌ Vulnerabilities found in pip-audit!"
+              cat advanced-audit-pip.txt
+              FOUND_VULNERABILITIES=1
+            fi
+          fi
+          
+          if [ -f "advanced-audit-safety.json" ]; then
+            echo "Checking safety results..."
+            if grep -q "\"vulnerabilities\"" advanced-audit-safety.json; then
+              echo "❌ Vulnerabilities found in safety check!"
+              cat advanced-audit-safety.json
+              FOUND_VULNERABILITIES=1
+            fi
+          fi
+          
+          if [ $FOUND_VULNERABILITIES -eq 1 ]; then
+            echo "❌ Vulnerabilities detected!"
+            exit 1
+          fi
+          
+          echo "✅ No critical vulnerabilities detected"
+        continue-on-error: false
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports-config2
+          path: |
+            AUDIT_REPORT.md
+            AUDIT_TABLE.md
+            AUDIT_TABLE.json
+            audit-report.json
+            GITHUB_SUMMARY.md
+            advanced-audit-pip.txt
+            advanced-audit-safety.json
+          if-no-files-found: warn
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config2
+          path: models/
+          if-no-files-found: warn
+

@@ -1,0 +1,485 @@
+name: Config 3 - Enterprise (Full) - FIXED
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "Pipfile"
+      - "Pipfile.lock"
+      - "train_model.py"
+      - "save_model.py"
+      - ".github/workflows/3-config-enterprise.yml"
+      - "generate_audit_report.py"
+      - "Dockerfile"
+      - "Dockerfile.dev"
+      - "Dockerfile.prod"
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  enterprise-full-audit:
+    runs-on: ubuntu-latest
+    name: "Audit: Enterprise Config (SBOM + fossa-cli + Full Reports)"
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Detect dependency manager (pip/poetry/pipenv)
+        id: detect-manager
+        run: |
+          if [ -f "pyproject.toml" ]; then
+            echo "manager=poetry" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Poetry (pyproject.toml)"
+          elif [ -f "Pipfile" ]; then
+            echo "manager=pipenv" >> $GITHUB_OUTPUT
+            echo "📦 Detected: Pipenv (Pipfile)"
+          else
+            echo "manager=pip" >> $GITHUB_OUTPUT
+            echo "📦 Detected: pip (requirements.txt)"
+          fi
+
+      - name: Install Poetry (if using Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+          poetry install --no-interaction --only dev
+
+      - name: Install Pipenv (if using Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          python -m pip install --upgrade pip pipenv
+          pipenv install
+          pipenv install --dev
+
+      - name: Install project dependencies (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit safety licensecheck pipdeptree pip-licenses
+
+      - name: Clean up old packages
+        run: |
+          echo "=========================================="
+          echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
+          echo "=========================================="
+          pip uninstall -y text-unidecode 2>/dev/null || true
+          echo "✅ Cleanup completed"
+        continue-on-error: true
+
+      - name: Train ML Model (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via pip..."
+          echo "=========================================="
+          python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Train ML Model (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via Poetry..."
+          echo "=========================================="
+          poetry run python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Train ML Model (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) via Pipenv..."
+          echo "=========================================="
+          pipenv run python save_model.py
+          echo "✅ Model training completed"
+        continue-on-error: false
+
+      - name: Run pip-audit Full audit (pip) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🔍 FULL AUDIT REPORT (pip-audit)..."
+          echo "=========================================="
+          pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          cat enterprise-audit-full.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Run pip-audit Full audit (Poetry) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🔍 FULL AUDIT REPORT (pip-audit via Poetry)..."
+          echo "=========================================="
+          poetry run pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          cat enterprise-audit-full.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Run pip-audit Full audit (Pipenv) - COLLECT DATA ONLY
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🔍 FULL AUDIT REPORT (pip-audit via Pipenv)..."
+          echo "=========================================="
+          pipenv run pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          cat enterprise-audit-full.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Generate SBOM (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "📋 GENERATING SOFTWARE BILL OF MATERIALS..."
+          echo "=========================================="
+          pip install cyclonedx-bom
+          cyclonedx-bom -o enterprise-sbom.json
+          cat enterprise-sbom.json | head -20
+          echo ""
+        continue-on-error: true
+
+      - name: Generate SBOM (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "📋 GENERATING SOFTWARE BILL OF MATERIALS (Poetry)..."
+          echo "=========================================="
+          poetry run pip install cyclonedx-bom
+          poetry run cyclonedx-bom -o enterprise-sbom.json
+          cat enterprise-sbom.json | head -20
+          echo ""
+        continue-on-error: true
+
+      - name: Generate SBOM (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "📋 GENERATING SOFTWARE BILL OF MATERIALS (Pipenv)..."
+          echo "=========================================="
+          pipenv install cyclonedx-bom
+          pipenv run cyclonedx-bom -o enterprise-sbom.json
+          cat enterprise-sbom.json | head -20
+          echo ""
+        continue-on-error: true
+
+      - name: Generate dependency tree (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🧪 COMPREHENSIVE DEPENDENCY TREE..."
+          echo "=========================================="
+          pipdeptree > enterprise-dependency-tree.txt
+          cat enterprise-dependency-tree.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Generate dependency tree (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🧪 COMPREHENSIVE DEPENDENCY TREE (Poetry)..."
+          echo "=========================================="
+          poetry run pipdeptree > enterprise-dependency-tree.txt
+          cat enterprise-dependency-tree.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Generate dependency tree (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🧪 COMPREHENSIVE DEPENDENCY TREE (Pipenv)..."
+          echo "=========================================="
+          pipenv run pipdeptree > enterprise-dependency-tree.txt
+          cat enterprise-dependency-tree.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Version inventory (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "📦 COMPLETE VERSION INVENTORY..."
+          echo "=========================================="
+          pip list > enterprise-versions.txt
+          cat enterprise-versions.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Version inventory (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "📦 COMPLETE VERSION INVENTORY (Poetry)..."
+          echo "=========================================="
+          poetry run pip list > enterprise-versions.txt
+          cat enterprise-versions.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Version inventory (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "📦 COMPLETE VERSION INVENTORY (Pipenv)..."
+          echo "=========================================="
+          pipenv run pip list > enterprise-versions.txt
+          cat enterprise-versions.txt
+          echo ""
+        continue-on-error: true
+
+      - name: Generate Audit Report (ALWAYS, even if vulnerabilities found)
+        run: |
+          echo "Running generate_audit_report.py..."
+          python generate_audit_report.py
+          echo "Checking if files were created..."
+          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
+        continue-on-error: true
+
+      - name: Create comprehensive audit reports archive
+        run: |
+          echo "=========================================="
+          echo "📦 CREATING ENTERPRISE REPORTS ARCHIVE..."
+          echo "=========================================="
+          mkdir -p enterprise-reports
+          cp enterprise-audit-full.txt enterprise-reports/ 2>/dev/null || true
+          cp enterprise-sbom.json enterprise-reports/ 2>/dev/null || true
+          cp enterprise-dependency-tree.txt enterprise-reports/ 2>/dev/null || true
+          cp enterprise-versions.txt enterprise-reports/ 2>/dev/null || true
+          cp AUDIT_REPORT.md enterprise-reports/ 2>/dev/null || true
+          cp AUDIT_TABLE.md enterprise-reports/ 2>/dev/null || true
+          cp AUDIT_TABLE.json enterprise-reports/ 2>/dev/null || true
+          cp audit-report.json enterprise-reports/ 2>/dev/null || true
+          cp GITHUB_SUMMARY.md enterprise-reports/ 2>/dev/null || true
+          zip -r enterprise-audit-reports.zip enterprise-reports
+          ls -lah enterprise-audit-reports.zip
+        continue-on-error: true
+
+      - name: Check for forbidden licenses (pip) - FAIL ON GPL
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
+          echo "=========================================="
+          licensecheck --zero
+          
+          if pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (Poetry) - FAIL ON GPL
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Poetry)..."
+          echo "=========================================="
+          poetry run licensecheck --zero
+          
+          if poetry run pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (Pipenv) - FAIL ON GPL
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Pipenv)..."
+          echo "=========================================="
+          pipenv run licensecheck --zero
+          
+          if pipenv run pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for CVE vulnerabilities - FAIL IF FOUND
+        run: |
+          echo "=========================================="
+          echo "🚨 CHECKING FOR VULNERABILITIES..."
+          echo "=========================================="
+          
+          if [ -f "enterprise-audit-full.txt" ]; then
+            echo "Checking pip-audit results..."
+            if grep -q "Found.*vulnerabilities" enterprise-audit-full.txt; then
+              echo "❌ Vulnerabilities found in audit report!"
+              cat enterprise-audit-full.txt
+              exit 1
+            fi
+          fi
+          
+          echo "✅ No critical vulnerabilities detected"
+        continue-on-error: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image (Dev)
+        if: github.ref != 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.dev
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-latest
+            ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-ent-dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            ENVIRONMENT=dev
+
+      - name: Build and push Docker image (Prod)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ml-api:enterprise-prod-latest
+            ghcr.io/${{ github.repository }}/ml-api:enterprise-prod-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-ent-prod
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            ENVIRONMENT=prod
+
+      - name: Comprehensive API testing
+        run: |
+          docker run -d -p 8000:8000 --name test-api-ent ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-latest
+          sleep 4
+          
+          echo "=========================================="
+          echo "🧪 COMPREHENSIVE API TESTING..."
+          echo "=========================================="
+          echo ""
+          
+          echo "Testing /health endpoint..."
+          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
+          echo "Response: $HEALTH_RESPONSE"
+          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+            echo "✅ Health check passed"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
+          echo ""
+          
+          echo "Testing /predict endpoint (Scenario 1)..."
+          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
+          echo "Response: $PREDICT_RESPONSE"
+          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
+            echo "✅ Predict endpoint passed"
+          else
+            echo "❌ Predict endpoint failed"
+            exit 1
+          fi
+          echo ""
+          
+          echo "Testing /predict endpoint (Scenario 2)..."
+          PREDICT_RESPONSE2=$(curl -s -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"pclass": 3, "sex": 0, "age": 20, "sibsp": 1, "parch": 0, "fare": 8.05, "embarked": 0}')
+          if echo "$PREDICT_RESPONSE2" | grep -q '"prediction"'; then
+            echo "✅ Scenario 2 passed"
+          else
+            echo "❌ Scenario 2 failed"
+            exit 1
+          fi
+          echo ""
+          
+          echo "=========================================="
+          echo "✅ All comprehensive API tests passed!"
+          echo "=========================================="
+          
+          docker stop test-api-ent || true
+        continue-on-error: false
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-artifacts-config3
+          path: models/
+          if-no-files-found: warn
+
+      - name: Upload enterprise SBOM
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-sbom
+          path: enterprise-sbom.json
+          if-no-files-found: warn
+
+      - name: Upload enterprise full audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-full-audit-reports
+          path: |
+            enterprise-audit-full.txt
+            enterprise-dependency-tree.txt
+            enterprise-versions.txt
+          if-no-files-found: warn
+
+      - name: Upload comprehensive reports archive
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-reports-archive
+          path: enterprise-audit-reports.zip
+          if-no-files-found: warn
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-reports-config3
+          path: |
+            AUDIT_REPORT.md
+            AUDIT_TABLE.md
+            AUDIT_TABLE.json
+            audit-report.json
+            GITHUB_SUMMARY.md
+          if-no-files-found: warn
+

@@ -1,4 +1,4 @@
-name: Config 1 - Basic - FIXED (CORRECTED)
+name: Config 1 - Basic
 
 on:
   push:
@@ -70,7 +70,8 @@ jobs:
           
           if [ -f "basic-audit.txt" ]; then
             echo "Checking pip-audit results..."
-            if grep -q "Found.*vulnerabilities" basic-audit.txt; then
+            # Check for any vulnerabilities (case-insensitive)
+            if grep -qi "vulnerabilit" basic-audit.txt || grep -qi "found.*vulnerabilit" basic-audit.txt; then
               echo "❌ Vulnerabilities found in audit report!"
               cat basic-audit.txt
               exit 1
