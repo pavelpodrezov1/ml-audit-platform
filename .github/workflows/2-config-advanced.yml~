@@ -20,7 +20,7 @@ on:
 jobs:
   advanced-scan:
     runs-on: ubuntu-latest
-    name: "Audit: Advanced Config (safety + licensecheck)"
+    name: "Audit: Config 2 - safety + licensecheck ONLY"
     permissions:
       contents: read
       packages: write
@@ -40,23 +40,21 @@ jobs:
         run: |
           if [ -f "pyproject.toml" ]; then
             echo "manager=poetry" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Poetry (pyproject.toml)"
+            echo "📦 Detected: Poetry"
           elif [ -f "Pipfile" ]; then
             echo "manager=pipenv" >> $GITHUB_OUTPUT
-            echo "📦 Detected: Pipenv (Pipfile)"
+            echo "📦 Detected: Pipenv"
           else
             echo "manager=pip" >> $GITHUB_OUTPUT
-            echo "📦 Detected: pip (requirements.txt)"
+            echo "📦 Detected: pip"
           fi
 
       - name: Install Poetry
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
-          echo "=========================================="
-          echo "📦 INSTALLING POETRY..."
-          echo "=========================================="
           python -m pip install --upgrade pip poetry
           poetry config virtualenvs.in-project true
+          poetry install --no-interaction
           echo "✅ Poetry installed"
 
       - name: Cache Poetry dependencies
@@ -67,22 +65,11 @@ jobs:
           key: poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: poetry-
 
-      - name: Install dependencies via Poetry
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "📦 INSTALLING DEPENDENCIES VIA POETRY..."
-          echo "=========================================="
-          poetry install --no-interaction
-          echo "✅ Dependencies installed via Poetry"
-
       - name: Install Pipenv
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
-          echo "=========================================="
-          echo "📦 INSTALLING PIPENV..."
-          echo "=========================================="
           python -m pip install --upgrade pip pipenv
+          pipenv install
           echo "✅ Pipenv installed"
 
       - name: Cache Pipenv dependencies
@@ -93,223 +80,145 @@ jobs:
           key: pipenv-${{ hashFiles('Pipfile.lock') }}
           restore-keys: pipenv-
 
-      - name: Install dependencies via Pipenv
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📦 INSTALLING DEPENDENCIES VIA PIPENV..."
-          echo "=========================================="
-          pipenv install
-          echo "✅ Dependencies installed via Pipenv"
-
-      - name: Install project dependencies (pip)
+      - name: Install with pip (if using pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           echo "✅ Dependencies installed via pip"
-        continue-on-error: false
 
-      - name: Install audit tools (pip)
+      - name: Install ONLY safety and licensecheck (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
-          pip install safety licensecheck pip-licenses
+          pip install safety licensecheck
+          echo "✅ Installed: safety, licensecheck"
         continue-on-error: false
 
-      - name: Install audit tools (Poetry)
+      - name: Install ONLY safety and licensecheck (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
-          poetry add --group dev safety licensecheck pip-licenses
+          poetry add --group dev safety licensecheck
+          echo "✅ Installed: safety, licensecheck"
         continue-on-error: false
 
-      - name: Install audit tools (Pipenv)
+      - name: Install ONLY safety and licensecheck (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
-          pipenv install --dev safety licensecheck pip-licenses
+          pipenv install --dev safety licensecheck
+          echo "✅ Installed: safety, licensecheck"
         continue-on-error: false
 
       - name: Train ML Model (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) via pip..."
+          echo "🤖 TRAINING ML MODEL (via pip)..."
           echo "=========================================="
           python save_model.py
-          echo ""
           echo "✅ Model training completed"
-          echo "Generated artifacts:"
-          ls -lh models/
         continue-on-error: false
 
       - name: Train ML Model (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) via Poetry..."
+          echo "🤖 TRAINING ML MODEL (via Poetry)..."
           echo "=========================================="
           poetry run python save_model.py
-          echo ""
           echo "✅ Model training completed"
-          echo "Generated artifacts:"
-          ls -lh models/
         continue-on-error: false
 
       - name: Train ML Model (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
           echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) via Pipenv..."
+          echo "🤖 TRAINING ML MODEL (via Pipenv)..."
           echo "=========================================="
           pipenv run python save_model.py
-          echo ""
           echo "✅ Model training completed"
-          echo "Generated artifacts:"
-          ls -lh models/
         continue-on-error: false
 
-      - name: Run safety check (pip)
+      - name: Run safety check (vuln + licenses) - pip
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
-          echo "🔐 RUNNING SAFETY SCAN (Advanced)..."
+          echo "🔐 RUNNING SAFETY CHECK (vuln + licenses)..."
           echo "=========================================="
-          safety check --json > advanced-safety-report.json
-          cat advanced-safety-report.json
+          safety check --json > config2-safety-report.json
+          cat config2-safety-report.json
           echo ""
         continue-on-error: false
 
-      - name: Run safety check (Poetry)
+      - name: Run safety check (vuln + licenses) - Poetry
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
-          echo "🔐 RUNNING SAFETY SCAN (Advanced via Poetry)..."
+          echo "🔐 RUNNING SAFETY CHECK (vuln + licenses)..."
           echo "=========================================="
-          poetry run safety check --json > advanced-safety-report.json
-          cat advanced-safety-report.json
+          poetry run safety check --json > config2-safety-report.json
+          cat config2-safety-report.json
           echo ""
         continue-on-error: false
 
-      - name: Run safety check (Pipenv)
+      - name: Run safety check (vuln + licenses) - Pipenv
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
           echo "=========================================="
-          echo "🔐 RUNNING SAFETY SCAN (Advanced via Pipenv)..."
+          echo "🔐 RUNNING SAFETY CHECK (vuln + licenses)..."
           echo "=========================================="
-          pipenv run safety check --json > advanced-safety-report.json
-          cat advanced-safety-report.json
+          pipenv run safety check --json > config2-safety-report.json
+          cat config2-safety-report.json
           echo ""
         continue-on-error: false
 
-      - name: Check for forbidden licenses (pip)
+      - name: Check licenses with licensecheck (strategy: allowed/forbidden) - pip
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
           echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden)..."
           echo "=========================================="
           licensecheck --zero
-          
-          if pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
           echo ""
         continue-on-error: false
 
-      - name: Check for forbidden licenses (Poetry)
+      - name: Check licenses with licensecheck (strategy: allowed/forbidden) - Poetry
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden) via Poetry..."
+          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden)..."
           echo "=========================================="
           poetry run licensecheck --zero
-          
-          if poetry run pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
           echo ""
         continue-on-error: false
 
-      - name: Check for forbidden licenses (Pipenv)
+      - name: Check licenses with licensecheck (strategy: allowed/forbidden) - Pipenv
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden) via Pipenv..."
+          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden)..."
           echo "=========================================="
           pipenv run licensecheck --zero
-          
-          if pipenv run pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
           echo ""
-        continue-on-error: false
-
-      - name: Generate licenses report (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "📜 GENERATING LICENSES REPORT..."
-          echo "=========================================="
-          pip-licenses --format=json > advanced-licenses.json
-          pip-licenses
-          echo ""
-          echo "✅ Licenses exported to advanced-licenses.json"
-        continue-on-error: false
-
-      - name: Generate licenses report (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "📜 GENERATING LICENSES REPORT via Poetry..."
-          echo "=========================================="
-          poetry run pip-licenses --format=json > advanced-licenses.json
-          poetry run pip-licenses
-          echo ""
-          echo "✅ Licenses exported to advanced-licenses.json"
-        continue-on-error: false
-
-      - name: Generate licenses report (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📜 GENERATING LICENSES REPORT via Pipenv..."
-          echo "=========================================="
-          pipenv run pip-licenses --format=json > advanced-licenses.json
-          pipenv run pip-licenses
-          echo ""
-          echo "✅ Licenses exported to advanced-licenses.json"
         continue-on-error: false
 
       - name: Export Poetry lock-file
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
-          echo "=========================================="
-          echo "📌 POETRY LOCK-FILE EXPORT"
-          echo "=========================================="
-          poetry export -f requirements.txt --output poetry-requirements.txt
-          echo "✅ Poetry lock-file exported to poetry-requirements.txt"
+          poetry export -f requirements.txt --output config2-poetry-requirements.txt
+          echo "✅ Poetry lock-file exported"
         continue-on-error: true
 
       - name: Export Pipenv lock-file
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
-          echo "=========================================="
-          echo "📌 PIPENV LOCK-FILE EXPORT"
-          echo "=========================================="
-          pipenv lock -r > pipenv-requirements.txt
-          echo "✅ Pipenv lock-file exported to pipenv-requirements.txt"
+          pipenv lock -r > config2-pipenv-requirements.txt
+          echo "✅ Pipenv lock-file exported"
         continue-on-error: true
 
       - name: Generate Audit Report
         run: |
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
-          echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Set up Docker Buildx
@@ -322,97 +231,59 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and PUSH Docker image to GHCR
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/ml-api:advanced-latest
-            ghcr.io/${{ github.repository }}/ml-api:advanced-${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-adv
+            ghcr.io/${{ github.repository }}/ml-api:config2-latest
+            ghcr.io/${{ github.repository }}/ml-api:config2-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Test API endpoints
         run: |
-          docker run -d -p 8000:8000 --name test-api ghcr.io/${{ github.repository }}/ml-api:advanced-latest
+          docker run -d -p 8000:8000 --name test-api-config2 ghcr.io/${{ github.repository }}/ml-api:config2-latest
           sleep 4
           
           echo "=========================================="
-          echo "🧪 TESTING API ENDPOINTS (Advanced)..."
+          echo "🧪 TESTING API ENDPOINTS (Config 2)..."
           echo "=========================================="
-          echo ""
           
           echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
-          echo "Response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+          HEALTH=$(curl -s http://localhost:8000/health)
+          if echo "$HEALTH" | grep -q "healthy"; then
             echo "✅ Health check passed"
           else
             echo "❌ Health check failed"
             exit 1
           fi
-          echo ""
           
           echo "Testing /predict endpoint..."
-          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
+          PRED=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          echo "Response: $PREDICT_RESPONSE"
-          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
+          if echo "$PRED" | grep -q "prediction"; then
             echo "✅ Predict endpoint passed"
           else
             echo "❌ Predict endpoint failed"
             exit 1
           fi
-          echo ""
           
-          echo "=========================================="
-          echo "✅ All Advanced API tests passed!"
-          echo "=========================================="
-          
-          docker stop test-api || true
+          docker stop test-api-config2 || true
         continue-on-error: false
 
-      - name: Upload model artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: model-artifacts-config2
-          path: models/
-          if-no-files-found: warn
-
-      - name: Upload advanced audit reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: advanced-audit-reports
+          name: config2-artifacts
           path: |
-            advanced-safety-report.json
-            advanced-licenses.json
-          if-no-files-found: warn
-
-      - name: Upload dependency manager exports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dependency-manager-exports
-          path: |
-            poetry-requirements.txt
-            pipenv-requirements.txt
-          if-no-files-found: ignore
-
-      - name: Upload Audit Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-reports-config2
-          path: |
+            models/
+            config2-safety-report.json
+            config2-poetry-requirements.txt
+            config2-pipenv-requirements.txt
             AUDIT_REPORT.md
-            AUDIT_TABLE.md
-            AUDIT_TABLE.json
-            audit-report.json
-            GITHUB_SUMMARY.md
           if-no-files-found: warn
 

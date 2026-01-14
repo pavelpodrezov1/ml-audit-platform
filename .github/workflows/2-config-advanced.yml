@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "requirements.txt"
-      - "pyproject.toml"
-      - "poetry.lock"
-      - "Pipfile"
-      - "Pipfile.lock"
+      - "requirements.txt"              # ОСНОВНОЙ ТРИГГЕР
+      - "pyproject.toml"                # Опционально (если будет добавлен)
+      - "poetry.lock"                   # Опционально (если будет добавлен)
+      - "Pipfile"                       # Опционально (если будет добавлен)
+      - "Pipfile.lock"                  # Опционально (если будет добавлен)
       - "train_model.py"
       - "save_model.py"
       - ".github/workflows/2-config-advanced.yml"
