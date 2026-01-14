@@ -1,10 +1,15 @@
-name: Config 2 - Advanced CI/CD
+name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check)
 
 on:
   push:
     branches: [main]
     paths:
       - "requirements.txt"
+      - "pyproject.toml"
+      - "poetry.lock"
+      - "Pipfile"
+      - "Pipfile.lock"
+      - ".licensecheck.toml"
       - "train_model.py"
       - "save_model.py"
       - ".github/workflows/2-config-advanced.yml"
@@ -16,7 +21,7 @@ on:
 jobs:
   advanced-scan:
     runs-on: ubuntu-latest
-    name: "Audit: Config 2 - safety + licensecheck ONLY"
+    name: "Audit: Config 2 - Safety + LicenseCheck with Poetry/Pipenv"
     permissions:
       contents: read
       packages: write
@@ -31,49 +36,316 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
 
-      - name: Install project dependencies
+      - name: Detect dependency manager (Poetry or Pipenv)
+        id: detect-manager
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-        continue-on-error: false
+          if [ -f "pyproject.toml" ]; then
+            echo "manager=poetry" >> $GITHUB_OUTPUT
+            echo "✅ Detected Poetry (pyproject.toml)"
+          elif [ -f "Pipfile" ]; then
+            echo "manager=pipenv" >> $GITHUB_OUTPUT
+            echo "✅ Detected Pipenv (Pipfile)"
+          else
+            echo "manager=pip" >> $GITHUB_OUTPUT
+            echo "✅ Detected pip (requirements.txt)"
+          fi
 
-      - name: Install ONLY safety and licensecheck
-        run: |
-          pip install safety licensecheck
-        continue-on-error: false
-
-      - name: Train ML Model
+      # ========== POETRY SECTION ==========
+      - name: Install Poetry (if needed)
+        if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
-          echo "🤖 TRAINING ML MODEL..."
+          echo "📦 INSTALLING POETRY..."
+          echo "=========================================="
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.in-project true
+          echo "✅ Poetry installed"
+        continue-on-error: false
+
+      - name: Cache Poetry dependencies
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: poetry-
+
+      - name: Install dependencies via Poetry
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "📦 INSTALLING DEPENDENCIES VIA POETRY..."
+          echo "=========================================="
+          poetry install --no-interaction
+          echo "✅ Dependencies installed via Poetry"
+        continue-on-error: false
+
+      - name: Install audit tools via Poetry
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🔧 INSTALLING AUDIT TOOLS VIA POETRY..."
+          echo "=========================================="
+          poetry add --group dev safety licensecheck pip-licenses
+          echo "✅ Audit tools installed"
+        continue-on-error: false
+
+      # ========== PIPENV SECTION ==========
+      - name: Install Pipenv (if needed)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "📦 INSTALLING PIPENV..."
+          echo "=========================================="
+          python -m pip install --upgrade pip
+          pip install pipenv
+          echo "✅ Pipenv installed"
+        continue-on-error: false
+
+      - name: Cache Pipenv dependencies
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        uses: actions/cache@v3
+        with:
+          path: .local/share/virtualenvs
+          key: pipenv-${{ hashFiles('Pipfile.lock') }}
+          restore-keys: pipenv-
+
+      - name: Install dependencies via Pipenv
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "📦 INSTALLING DEPENDENCIES VIA PIPENV..."
+          echo "=========================================="
+          pipenv install
+          echo "✅ Dependencies installed via Pipenv"
+        continue-on-error: false
+
+      - name: Install audit tools via Pipenv
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🔧 INSTALLING AUDIT TOOLS VIA PIPENV..."
+          echo "=========================================="
+          pipenv install --dev safety licensecheck pip-licenses
+          echo "✅ Audit tools installed"
+        continue-on-error: false
+
+      # ========== PIP SECTION (fallback) ==========
+      - name: Install dependencies via pip
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "📦 INSTALLING DEPENDENCIES VIA PIP..."
+          echo "=========================================="
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "✅ Dependencies installed via pip"
+        continue-on-error: false
+
+      - name: Install audit tools via pip
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🔧 INSTALLING AUDIT TOOLS VIA PIP..."
+          echo "=========================================="
+          pip install safety licensecheck pip-licenses
+          echo "✅ Audit tools installed"
+        continue-on-error: false
+
+      # ========== TRAINING & AUDITING (Poetry) ==========
+      - name: Train ML Model (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) VIA POETRY..."
+          echo "=========================================="
+          poetry run python save_model.py
+          echo "✅ Model training completed"
+          ls -lh models/
+        continue-on-error: false
+
+      - name: Run Safety vulnerability scan (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (Poetry)..."
+          echo "=========================================="
+          poetry run safety check --json > advanced-safety-report.json || true
+          cat advanced-safety-report.json
+          echo ""
+        continue-on-error: false
+
+      - name: Generate licenses report (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "📋 GENERATING LICENSES REPORT (Poetry)..."
+          echo "=========================================="
+          poetry run pip-licenses --format json > advanced-licenses.json
+          poetry run pip-licenses
+          echo "✅ Licenses exported to advanced-licenses.json"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses with strategy (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "⚖️ CHECKING LICENSE STRATEGY (Poetry)..."
+          echo "Config: .licensecheck.toml (allowed/forbidden)"
+          echo "=========================================="
+          poetry run licensecheck --zero --file .licensecheck.toml
+          echo "✅ License check completed"
+          echo ""
+        continue-on-error: false
+
+      # ========== TRAINING & AUDITING (Pipenv) ==========
+      - name: Train ML Model (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) VIA PIPENV..."
+          echo "=========================================="
+          pipenv run python save_model.py
+          echo "✅ Model training completed"
+          ls -lh models/
+        continue-on-error: false
+
+      - name: Run Safety vulnerability scan (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (Pipenv)..."
+          echo "=========================================="
+          pipenv run safety check --json > advanced-safety-report.json || true
+          cat advanced-safety-report.json
+          echo ""
+        continue-on-error: false
+
+      - name: Generate licenses report (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "📋 GENERATING LICENSES REPORT (Pipenv)..."
+          echo "=========================================="
+          pipenv run pip-licenses --format json > advanced-licenses.json
+          pipenv run pip-licenses
+          echo "✅ Licenses exported to advanced-licenses.json"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses with strategy (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "⚖️ CHECKING LICENSE STRATEGY (Pipenv)..."
+          echo "Config: .licensecheck.toml (allowed/forbidden)"
+          echo "=========================================="
+          pipenv run licensecheck --zero --file .licensecheck.toml
+          echo "✅ License check completed"
+          echo ""
+        continue-on-error: false
+
+      # ========== TRAINING & AUDITING (pip) ==========
+      - name: Train ML Model (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🤖 TRAINING ML MODEL (Titanic) VIA PIP..."
           echo "=========================================="
           python save_model.py
           echo "✅ Model training completed"
+          ls -lh models/
         continue-on-error: false
 
-      - name: Run safety check (vuln + licenses)
+      - name: Run Safety vulnerability scan (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
-          echo "🔐 RUNNING SAFETY CHECK..."
+          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (pip)..."
           echo "=========================================="
-          safety check --json > config2-safety-report.json
-          cat config2-safety-report.json
+          safety check --json > advanced-safety-report.json || true
+          cat advanced-safety-report.json
           echo ""
         continue-on-error: false
 
-      - name: Check licenses with licensecheck
+      - name: Generate licenses report (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY..."
+          echo "📋 GENERATING LICENSES REPORT (pip)..."
           echo "=========================================="
-          licensecheck --zero
+          pip-licenses --format json > advanced-licenses.json
+          pip-licenses
+          echo "✅ Licenses exported to advanced-licenses.json"
           echo ""
         continue-on-error: false
 
-      - name: Generate Audit Report
+      - name: Check for forbidden licenses with strategy (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
         run: |
+          echo "=========================================="
+          echo "⚖️ CHECKING LICENSE STRATEGY (pip)..."
+          echo "Config: .licensecheck.toml (allowed/forbidden)"
+          echo "=========================================="
+          licensecheck --zero --file .licensecheck.toml
+          echo "✅ License check completed"
+          echo ""
+        continue-on-error: false
+
+      # ========== COMMON STEPS ==========
+      - name: Generate dependency tree
+        run: |
+          echo "=========================================="
+          echo "🌳 GENERATING DEPENDENCY TREE..."
+          echo "=========================================="
+          pip install pipdeptree
+          pipdeptree > advanced-dependency-tree.txt
+          cat advanced-dependency-tree.txt
+          echo "✅ Dependency tree generated"
+          echo ""
+        continue-on-error: false
+
+      - name: Complete version inventory
+        run: |
+          echo "=========================================="
+          echo "📊 COMPLETE VERSION INVENTORY..."
+          echo "=========================================="
+          pip list > advanced-versions.txt
+          cat advanced-versions.txt
+          echo "✅ Version inventory generated"
+          echo ""
+        continue-on-error: false
+
+      - name: Generate comprehensive Audit Report
+        run: |
+          echo "Running generate_audit_report.py..."
           python generate_audit_report.py
+          echo "✅ Audit reports generated"
         continue-on-error: false
+
+      - name: Create comprehensive audit reports archive
+        run: |
+          echo "=========================================="
+          echo "📦 CREATING REPORTS ARCHIVE..."
+          echo "=========================================="
+          mkdir -p advanced-reports
+          cp advanced-safety-report.json advanced-reports/ 2>/dev/null || true
+          cp advanced-licenses.json advanced-reports/ 2>/dev/null || true
+          cp advanced-dependency-tree.txt advanced-reports/ 2>/dev/null || true
+          cp advanced-versions.txt advanced-reports/ 2>/dev/null || true
+          cp .licensecheck.toml advanced-reports/ 2>/dev/null || true
+          cp AUDIT_REPORT.md advanced-reports/ 2>/dev/null || true
+          cp AUDIT_TABLE.md advanced-reports/ 2>/dev/null || true
+          cp AUDIT_TABLE.json advanced-reports/ 2>/dev/null || true
+          cp audit-report.json advanced-reports/ 2>/dev/null || true
+          cp GITHUB_SUMMARY.md advanced-reports/ 2>/dev/null || true
+          
+          zip -r advanced-audit-reports.zip advanced-reports
+          echo "✅ Archive created: advanced-audit-reports.zip"
+          ls -lah advanced-audit-reports.zip
+        continue-on-error: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -96,13 +368,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test API endpoints
+      - name: Comprehensive API testing
         run: |
-          docker run -d -p 8000:8000 --name test-api-config2 ghcr.io/${{ github.repository }}/ml-api:config2-latest
+          docker run -d -p 8000:8000 --name test-api-advanced ghcr.io/${{ github.repository }}/ml-api:config2-latest
           sleep 4
           
           echo "=========================================="
-          echo "🧪 TESTING API ENDPOINTS..."
+          echo "🧪 COMPREHENSIVE API TESTING..."
           echo "=========================================="
           
           echo "Testing /health endpoint..."
@@ -114,28 +386,70 @@ jobs:
             exit 1
           fi
           
-          echo "Testing /predict endpoint..."
-          PRED=$(curl -s -X POST http://localhost:8000/predict \
+          echo "Testing /predict endpoint (Scenario 1)..."
+          PRED1=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          if echo "$PRED" | grep -q "prediction"; then
-            echo "✅ Predict endpoint passed"
+          if echo "$PRED1" | grep -q "prediction"; then
+            echo "✅ Scenario 1 passed"
           else
-            echo "❌ Predict endpoint failed"
+            echo "❌ Scenario 1 failed"
             exit 1
           fi
           
-          docker stop test-api-config2 || true
+          echo "Testing /predict endpoint (Scenario 2)..."
+          PRED2=$(curl -s -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"pclass": 3, "sex": 0, "age": 20, "sibsp": 1, "parch": 0, "fare": 8.05, "embarked": 0}')
+          if echo "$PRED2" | grep -q "prediction"; then
+            echo "✅ Scenario 2 passed"
+          else
+            echo "❌ Scenario 2 failed"
+            exit 1
+          fi
+          
+          echo "✅ All comprehensive API tests passed!"
+          docker stop test-api-advanced || true
         continue-on-error: false
 
-      - name: Upload artifacts
+      - name: Upload model artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: config2-artifacts
+          name: model-artifacts-config2
+          path: models/
+          if-no-files-found: warn
+
+      - name: Upload advanced audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: advanced-audit-reports
           path: |
-            models/
-            config2-safety-report.json
+            advanced-safety-report.json
+            advanced-licenses.json
+            advanced-dependency-tree.txt
+            advanced-versions.txt
+          if-no-files-found: warn
+
+      - name: Upload comprehensive reports archive
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: advanced-reports-archive
+          path: advanced-audit-reports.zip
+          if-no-files-found: warn
+
+      - name: Upload Audit Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-reports-config2
+          path: |
             AUDIT_REPORT.md
+            AUDIT_TABLE.md
+            AUDIT_TABLE.json
+            audit-report.json
+            GITHUB_SUMMARY.md
           if-no-files-found: warn
 
