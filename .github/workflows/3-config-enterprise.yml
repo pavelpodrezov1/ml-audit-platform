@@ -1,4 +1,4 @@
-name: Config 3 - Enterprise
+name: Config 3 - Enterprise (Full)
 
 on:
   push:
@@ -112,38 +112,38 @@ jobs:
           echo "✅ Model training completed"
         continue-on-error: false
 
-      - name: Run pip-audit Full audit (pip) - COLLECT DATA ONLY
+      - name: Run pip-audit Full audit (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
           echo "🔍 FULL AUDIT REPORT (pip-audit)..."
           echo "=========================================="
-          pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          pip-audit --desc > enterprise-audit-full.txt 2>&1
           cat enterprise-audit-full.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
-      - name: Run pip-audit Full audit (Poetry) - COLLECT DATA ONLY
+      - name: Run pip-audit Full audit (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
           echo "🔍 FULL AUDIT REPORT (pip-audit via Poetry)..."
           echo "=========================================="
-          poetry run pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          poetry run pip-audit --desc > enterprise-audit-full.txt 2>&1
           cat enterprise-audit-full.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
-      - name: Run pip-audit Full audit (Pipenv) - COLLECT DATA ONLY
+      - name: Run pip-audit Full audit (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
           echo "=========================================="
           echo "🔍 FULL AUDIT REPORT (pip-audit via Pipenv)..."
           echo "=========================================="
-          pipenv run pip-audit --desc > enterprise-audit-full.txt 2>&1 || true
+          pipenv run pip-audit --desc > enterprise-audit-full.txt 2>&1
           cat enterprise-audit-full.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate SBOM (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
@@ -190,7 +190,7 @@ jobs:
           pipdeptree > enterprise-dependency-tree.txt
           cat enterprise-dependency-tree.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate dependency tree (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
@@ -201,7 +201,7 @@ jobs:
           poetry run pipdeptree > enterprise-dependency-tree.txt
           cat enterprise-dependency-tree.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Generate dependency tree (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
@@ -212,7 +212,7 @@ jobs:
           pipenv run pipdeptree > enterprise-dependency-tree.txt
           cat enterprise-dependency-tree.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Version inventory (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
@@ -223,7 +223,7 @@ jobs:
           pip list > enterprise-versions.txt
           cat enterprise-versions.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Version inventory (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
@@ -234,7 +234,7 @@ jobs:
           poetry run pip list > enterprise-versions.txt
           cat enterprise-versions.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Version inventory (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
@@ -245,15 +245,63 @@ jobs:
           pipenv run pip list > enterprise-versions.txt
           cat enterprise-versions.txt
           echo ""
-        continue-on-error: true
+        continue-on-error: false
 
-      - name: Generate Audit Report (ALWAYS, even if vulnerabilities found)
+      - name: Check for forbidden licenses (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
+          echo "=========================================="
+          licensecheck --zero
+          
+          if pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Poetry)..."
+          echo "=========================================="
+          poetry run licensecheck --zero
+          
+          if poetry run pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Check for forbidden licenses (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Pipenv)..."
+          echo "=========================================="
+          pipenv run licensecheck --zero
+          
+          if pipenv run pip-licenses | grep -i "gpl"; then
+            echo "❌ GPL license detected!"
+            exit 1
+          fi
+          echo "✅ No GPL licenses found"
+          echo ""
+        continue-on-error: false
+
+      - name: Generate Audit Report
         run: |
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
           echo "Checking if files were created..."
           ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
-        continue-on-error: true
+        continue-on-error: false
 
       - name: Create comprehensive audit reports archive
         run: |
@@ -273,72 +321,6 @@ jobs:
           zip -r enterprise-audit-reports.zip enterprise-reports
           ls -lah enterprise-audit-reports.zip
         continue-on-error: true
-
-      - name: Check for forbidden licenses (pip) - FAIL ON GPL
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
-          echo "=========================================="
-          licensecheck --zero
-          
-          if pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
-          echo ""
-        continue-on-error: false
-
-      - name: Check for forbidden licenses (Poetry) - FAIL ON GPL
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Poetry)..."
-          echo "=========================================="
-          poetry run licensecheck --zero
-          
-          if poetry run pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
-          echo ""
-        continue-on-error: false
-
-      - name: Check for forbidden licenses (Pipenv) - FAIL ON GPL
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) (Pipenv)..."
-          echo "=========================================="
-          pipenv run licensecheck --zero
-          
-          if pipenv run pip-licenses | grep -i "gpl"; then
-            echo "❌ GPL license detected!"
-            exit 1
-          fi
-          echo "✅ No GPL licenses found"
-          echo ""
-        continue-on-error: false
-
-      - name: Check for CVE vulnerabilities - FAIL IF FOUND
-        run: |
-          echo "=========================================="
-          echo "🚨 CHECKING FOR VULNERABILITIES..."
-          echo "=========================================="
-          
-          if [ -f "enterprise-audit-full.txt" ]; then
-            echo "Checking pip-audit results..."
-            if grep -q "Found.*vulnerabilities" enterprise-audit-full.txt; then
-              echo "❌ Vulnerabilities found in audit report!"
-              cat enterprise-audit-full.txt
-              exit 1
-            fi
-          fi
-          
-          echo "✅ No critical vulnerabilities detected"
-        continue-on-error: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
