@@ -1,43 +1,74 @@
 [metadata]
-# License check configuration for ml-audit-platform
-# Defines allowed and forbidden licenses for compliance
+# LicenseCheck configuration - defines allowed and forbidden licenses
+# For: ML Audit Platform - Titanic Survival Prediction with DevSecOps compliance
 
 [allowed]
-# These licenses are ALLOWED in the project
+# Permissive and Commercial-Friendly Licenses (ALLOWED)
 Apache Software License
 Apache License 2.0
 Apache License, Version 2.0
 Apache 2.0
+Apache-2.0
 BSD
 BSD License
 BSD-3-Clause
 BSD-2-Clause
+0BSD
 Simplified BSD
 MIT
 MIT License
 Python Software Foundation License
+PSF
 ISC License (ISCL)
+ISC
 Mozilla Public License 2.0 (MPL 2.0)
+MPL-2.0
 Public Domain
 The Unlicense
 Zope Public License
-Artistic License
+ZPL
+Educational Community License v2.0 (ECL 2.0)
 
 [forbidden]
-# These licenses are FORBIDDEN in the project
-GNU General Public License v3 (GPLv3)
-GNU General Public License v3 or later (GPLv3+)
-GNU General Public License v2 (GPLv2)
-GNU General Public License v2 or later (GPLv2+)
-GNU General Public License (GPL)
+# Restrictive and Copyleft Licenses (FORBIDDEN)
+GNU General Public License
+GNU General Public License v1
+GNU General Public License v1 or later
+GNU General Public License v2
+GNU General Public License v2 or later
+GNU General Public License v3
+GNU General Public License v3 or later
+GPLv1
+GPLv2
+GPLv3
+GPLv2+
+GPLv3+
+GPL
+GPL v1
+GPL v2
+GPL v3
+GNU Lesser General Public License
+GNU Lesser General Public License v2
+GNU Lesser General Public License v2 or later
+GNU Lesser General Public License v3
+GNU Lesser General Public License v3 or later
+LGPLv2
+LGPLv3
+LGPLv2+
+LGPLv3+
+LGPL
+GNU Affero General Public License
 GNU Affero General Public License v3
 GNU Affero General Public License v3 or later
-GNU Lesser General Public License v2 (LGPLv2)
-GNU Lesser General Public License v2 or later (LGPLv2+)
-GNU Lesser General Public License v3 (LGPLv3)
-GNU Lesser General Public License v3 or later (LGPLv3+)
+AGPLv3
+AGPL
 Affero General Public License
-SSPL (Server Side Public License)
+Server Side Public License
+SSPL
 Commons Clause
 Business Source License
+BSL
+Elastic License
+Functional Source License
+FSL
 

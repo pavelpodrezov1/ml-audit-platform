@@ -1,4 +1,4 @@
-name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check) v4
+name: Config 2 - Advanced Audit (Safety + LicenseCheck)
 
 on:
   push:
@@ -10,23 +10,20 @@ on:
       - "Pipfile"
       - "Pipfile.lock"
       - ".licensecheck.toml"
-      - "train_model.py"
-      - "save_model.py"
       - ".github/workflows/2-config-advanced.yml"
-      - "generate_audit_report.py"
-      - "Dockerfile"
   pull_request:
     branches: [main]
 
 jobs:
-  advanced-scan:
+  config2-advanced-audit:
     runs-on: ubuntu-latest
-    name: "Audit: Config 2 - Safety + LicenseCheck with Poetry/Pipenv"
+    name: "Config 2: Safety + LicenseCheck Audit"
     permissions:
       contents: read
       packages: write
 
     steps:
+      # ========== SETUP ==========
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -36,327 +33,140 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
 
-      - name: "🔍 DEBUG: List files in repo root"
-        run: |
-          echo "=========================================="
-          echo "FILES IN REPO ROOT:"
-          echo "=========================================="
-          ls -la | head -30
-          echo ""
-          echo "Looking for licensecheck config:"
-          find . -name "*licensecheck*" -o -name ".licensecheck*" 2>/dev/null || echo "NOT FOUND"
-          echo ""
-
-      - name: Detect dependency manager (Poetry or Pipenv)
-        id: detect-manager
+      # ========== DETECT MANAGER ==========
+      - name: Detect dependency manager
+        id: manager
         run: |
           if [ -f "pyproject.toml" ]; then
-            echo "manager=poetry" >> $GITHUB_OUTPUT
-            echo "✅ Detected Poetry (pyproject.toml)"
+            echo "type=poetry" >> $GITHUB_OUTPUT
+            echo "✅ Poetry detected"
           elif [ -f "Pipfile" ]; then
-            echo "manager=pipenv" >> $GITHUB_OUTPUT
-            echo "✅ Detected Pipenv (Pipfile)"
+            echo "type=pipenv" >> $GITHUB_OUTPUT
+            echo "✅ Pipenv detected"
           else
-            echo "manager=pip" >> $GITHUB_OUTPUT
-            echo "✅ Detected pip (requirements.txt)"
+            echo "type=pip" >> $GITHUB_OUTPUT
+            echo "✅ pip detected"
           fi
 
-      # ========== POETRY SECTION ==========
-      - name: Install Poetry (if needed)
-        if: steps.detect-manager.outputs.manager == 'poetry'
+      # ========== POETRY FLOW ==========
+      - name: "[Poetry] Install Poetry"
+        if: steps.manager.outputs.type == 'poetry'
         run: |
-          echo "=========================================="
-          echo "📦 INSTALLING POETRY..."
-          echo "=========================================="
-          python -m pip install --upgrade pip
-          pip install poetry
+          python -m pip install --upgrade pip poetry
           poetry config virtualenvs.in-project true
-          echo "✅ Poetry installed"
-        continue-on-error: false
 
-      - name: Install dependencies via Poetry
-        if: steps.detect-manager.outputs.manager == 'poetry'
+      - name: "[Poetry] Install dependencies"
+        if: steps.manager.outputs.type == 'poetry'
+        run: poetry install --no-interaction
+
+      - name: "[Poetry] Install audit tools"
+        if: steps.manager.outputs.type == 'poetry'
+        run: |
+          pip install --upgrade safety licensecheck pip-licenses
+
+      # ========== PIPENV FLOW ==========
+      - name: "[Pipenv] Install Pipenv"
+        if: steps.manager.outputs.type == 'pipenv'
+        run: |
+          python -m pip install --upgrade pip pipenv
+
+      - name: "[Pipenv] Install dependencies"
+        if: steps.manager.outputs.type == 'pipenv'
+        run: pipenv install
+
+      - name: "[Pipenv] Install audit tools"
+        if: steps.manager.outputs.type == 'pipenv'
+        run: |
+          pip install --upgrade safety licensecheck pip-licenses
+
+      # ========== PIP FLOW ==========
+      - name: "[pip] Install dependencies"
+        if: steps.manager.outputs.type == 'pip'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: "[pip] Install audit tools"
+        if: steps.manager.outputs.type == 'pip'
+        run: |
+          pip install --upgrade safety licensecheck pip-licenses
+
+      # ========== SAFETY CHECK (Vulnerabilities) ==========
+      - name: "🔐 Safety: Check vulnerabilities"
         run: |
           echo "=========================================="
-          echo "📦 INSTALLING DEPENDENCIES VIA POETRY..."
+          echo "🔐 SAFETY CHECK - Vulnerability Scan"
           echo "=========================================="
-          poetry install --no-interaction
-          echo "✅ Dependencies installed via Poetry"
-        continue-on-error: false
-
-      - name: Install audit tools directly via pip (NOT through Poetry!)
-        run: |
-          echo "=========================================="
-          echo "🔧 INSTALLING AUDIT TOOLS VIA PIP DIRECTLY..."
-          echo "=========================================="
-          pip install --upgrade pip setuptools wheel
-          pip install safety licensecheck pip-licenses pipdeptree
-          echo "✅ Audit tools installed"
+          safety check --json > safety-report.json || true
+          cat safety-report.json
           echo ""
-          echo "Verifying installations:"
-          which safety
-          which licensecheck
-          which pip-licenses
-          echo ""
-          echo "Tool versions:"
-          safety --version
-          pip-licenses --version
-          echo "licensecheck tool installed (no version flag)"
-        continue-on-error: false
 
-      # ========== TRAINING & AUDITING (Poetry) ==========
-      - name: Train ML Model (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
+      # ========== LICENSE CHECK (Compliance) ==========
+      - name: "🔍 Verify .licensecheck.toml exists"
         run: |
           echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) VIA POETRY..."
+          echo "🔍 Checking license configuration file"
           echo "=========================================="
-          poetry run python save_model.py
-          echo "✅ Model training completed"
-          ls -lh models/
-        continue-on-error: false
-
-      - name: Run Safety vulnerability scan
-        run: |
-          echo "=========================================="
-          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN..."
-          echo "=========================================="
-          safety check --json > advanced-safety-report.json || true
-          cat advanced-safety-report.json
-          echo ""
-        continue-on-error: false
-
-      - name: Generate licenses report
-        run: |
-          echo "=========================================="
-          echo "📋 GENERATING LICENSES REPORT..."
-          echo "=========================================="
-          pip-licenses --format json > advanced-licenses.json
-          pip-licenses
-          echo "✅ Licenses exported to advanced-licenses.json"
-          echo ""
-        continue-on-error: false
-
-      - name: "🔍 CRITICAL: Verify .licensecheck.toml EXISTS and READABLE"
-        run: |
-          echo "=========================================="
-          echo "🔍 CHECKING FOR .licensecheck.toml..."
-          echo "=========================================="
-          
-          # Check in current directory
-          if [ -f ".licensecheck.toml" ]; then
-            echo "✅ Found .licensecheck.toml in current directory"
+          if [ ! -f ".licensecheck.toml" ]; then
+            echo "❌ FATAL: .licensecheck.toml not found!"
             echo ""
-            echo "FILE CONTENT:"
-            cat .licensecheck.toml
-            echo ""
-            echo "FILE PERMISSIONS:"
-            ls -la .licensecheck.toml
-            echo ""
-          else
-            echo "❌ ERROR: .licensecheck.toml NOT FOUND in current directory!"
-            echo ""
-            echo "Current directory:"
-            pwd
-            echo ""
-            echo "Files matching pattern:"
-            find . -iname "*license*" 2>/dev/null | head -20
-            echo ""
-            echo "GITHUB WORKSPACE:"
-            echo "$GITHUB_WORKSPACE"
-            echo ""
-            echo "Exit with error code 1"
+            echo "Files in repo:"
+            find . -maxdepth 1 -name "*license*" -type f
             exit 1
           fi
-        continue-on-error: false
+          echo "✅ Found .licensecheck.toml"
+          echo ""
+          cat .licensecheck.toml
+          echo ""
 
-      - name: "⚖️ CRITICAL: Check for FORBIDDEN licenses with licensecheck"
+      - name: "⚖️ LicenseCheck: Check forbidden licenses"
         run: |
           echo "=========================================="
-          echo "⚖️ CHECKING LICENSE STRATEGY (FORBIDDEN: GPL)..."
+          echo "⚖️ LICENSE CHECK - Strategy Validation"
           echo "=========================================="
-          
-          # Run licensecheck with explicit error handling
-          echo "Running: licensecheck --zero --file .licensecheck.toml"
-          echo ""
-          
-          set +e  # Don't exit on error yet
+          set +e
           licensecheck --zero --file .licensecheck.toml
-          LICENSE_CHECK_EXIT=$?
-          set -e  # Resume exiting on error
+          EXIT_CODE=$?
+          set -e
           
-          echo ""
-          echo "licensecheck exit code: $LICENSE_CHECK_EXIT"
-          echo ""
-          
-          # If exit code is non-zero, it means forbidden licenses were found
-          if [ $LICENSE_CHECK_EXIT -ne 0 ]; then
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo ""
+            echo "✅ All licenses are allowed"
+          else
+            echo ""
             echo "❌ FORBIDDEN LICENSES DETECTED!"
-            echo "Exit code: $LICENSE_CHECK_EXIT"
-            echo "Config 2 FAILED ❌"
-            exit 1
-          else
-            echo "✅ All licenses are allowed (no forbidden licenses found)"
-            echo "Config 2 SUCCESS ✅"
-            exit 0
+            echo "Exit code: $EXIT_CODE"
+            exit $EXIT_CODE
           fi
-        continue-on-error: false
 
-      # ========== COMMON STEPS ==========
-      - name: Generate dependency tree
+      - name: "📋 Generate full license report"
         run: |
           echo "=========================================="
-          echo "🌳 GENERATING DEPENDENCY TREE..."
+          echo "📋 LICENSE REPORT - All packages"
           echo "=========================================="
-          pipdeptree > advanced-dependency-tree.txt
-          cat advanced-dependency-tree.txt
-          echo "✅ Dependency tree generated"
+          pip-licenses --format=json > licenses-report.json
+          pip-licenses
           echo ""
-        continue-on-error: false
 
-      - name: Complete version inventory
-        run: |
-          echo "=========================================="
-          echo "📊 COMPLETE VERSION INVENTORY..."
-          echo "=========================================="
-          pip list > advanced-versions.txt
-          cat advanced-versions.txt
-          echo "✅ Version inventory generated"
-          echo ""
-        continue-on-error: false
-
-      - name: Generate comprehensive Audit Report
-        run: |
-          echo "Running generate_audit_report.py..."
-          python generate_audit_report.py || echo "⚠️ generate_audit_report.py not found or failed"
-          echo "✅ Audit reports generated"
-        continue-on-error: true
-
-      - name: Create comprehensive audit reports archive
-        run: |
-          echo "=========================================="
-          echo "📦 CREATING REPORTS ARCHIVE..."
-          echo "=========================================="
-          mkdir -p advanced-reports
-          cp advanced-safety-report.json advanced-reports/ 2>/dev/null || true
-          cp advanced-licenses.json advanced-reports/ 2>/dev/null || true
-          cp advanced-dependency-tree.txt advanced-reports/ 2>/dev/null || true
-          cp advanced-versions.txt advanced-reports/ 2>/dev/null || true
-          cp .licensecheck.toml advanced-reports/ 2>/dev/null || true
-          cp AUDIT_REPORT.md advanced-reports/ 2>/dev/null || true
-          cp AUDIT_TABLE.md advanced-reports/ 2>/dev/null || true
-          cp AUDIT_TABLE.json advanced-reports/ 2>/dev/null || true
-          cp audit-report.json advanced-reports/ 2>/dev/null || true
-          cp GITHUB_SUMMARY.md advanced-reports/ 2>/dev/null || true
-          
-          zip -r advanced-audit-reports.zip advanced-reports
-          echo "✅ Archive created: advanced-audit-reports.zip"
-          ls -lah advanced-audit-reports.zip
-        continue-on-error: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and PUSH Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:config2-latest
-            ghcr.io/${{ github.repository }}/ml-api:config2-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Comprehensive API testing
-        run: |
-          docker run -d -p 8000:8000 --name test-api-advanced ghcr.io/${{ github.repository }}/ml-api:config2-latest
-          sleep 4
-          
-          echo "=========================================="
-          echo "🧪 COMPREHENSIVE API TESTING..."
-          echo "=========================================="
-          
-          echo "Testing /health endpoint..."
-          HEALTH=$(curl -s http://localhost:8000/health)
-          if echo "$HEALTH" | grep -q "healthy"; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed"
-            exit 1
-          fi
-          
-          echo "Testing /predict endpoint (Scenario 1)..."
-          PRED1=$(curl -s -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          if echo "$PRED1" | grep -q "prediction"; then
-            echo "✅ Scenario 1 passed"
-          else
-            echo "❌ Scenario 1 failed"
-            exit 1
-          fi
-          
-          echo "Testing /predict endpoint (Scenario 2)..."
-          PRED2=$(curl -s -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{"pclass": 3, "sex": 0, "age": 20, "sibsp": 1, "parch": 0, "fare": 8.05, "embarked": 0}')
-          if echo "$PRED2" | grep -q "prediction"; then
-            echo "✅ Scenario 2 passed"
-          else
-            echo "❌ Scenario 2 failed"
-            exit 1
-          fi
-          
-          echo "✅ All comprehensive API tests passed!"
-          docker stop test-api-advanced || true
-        continue-on-error: false
-
-      - name: Upload model artifacts
+      # ========== UPLOAD REPORTS ==========
+      - name: Upload safety report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: model-artifacts-config2
-          path: models/
-          if-no-files-found: warn
+          name: safety-report
+          path: safety-report.json
 
-      - name: Upload advanced audit reports
+      - name: Upload licenses report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: advanced-audit-reports
-          path: |
-            advanced-safety-report.json
-            advanced-licenses.json
-            advanced-dependency-tree.txt
-            advanced-versions.txt
-          if-no-files-found: warn
+          name: licenses-report
+          path: licenses-report.json
 
-      - name: Upload comprehensive reports archive
+      - name: Upload .licensecheck.toml
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: advanced-reports-archive
-          path: advanced-audit-reports.zip
-          if-no-files-found: warn
-
-      - name: Upload Audit Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: audit-reports-config2
-          path: |
-            AUDIT_REPORT.md
-            AUDIT_TABLE.md
-            AUDIT_TABLE.json
-            audit-report.json
-            GITHUB_SUMMARY.md
-          if-no-files-found: warn
+          name: license-config
+          path: .licensecheck.toml
 
