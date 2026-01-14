@@ -4,9 +4,6 @@
 
 [allowed]
 # These licenses are ALLOWED in the project
-
-[forbidden]
-# These licenses are FORBIDDEN in the project
 Apache Software License
 Apache License 2.0
 Apache License, Version 2.0
@@ -24,10 +21,15 @@ Mozilla Public License 2.0 (MPL 2.0)
 Public Domain
 The Unlicense
 Zope Public License
+Artistic License
+
+[forbidden]
+# These licenses are FORBIDDEN in the project
 GNU General Public License v3 (GPLv3)
 GNU General Public License v3 or later (GPLv3+)
 GNU General Public License v2 (GPLv2)
 GNU General Public License v2 or later (GPLv2+)
+GNU General Public License (GPL)
 GNU Affero General Public License v3
 GNU Affero General Public License v3 or later
 GNU Lesser General Public License v2 (LGPLv2)
