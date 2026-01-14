@@ -16,10 +16,9 @@ on:
 jobs:
   basic-audit:
     runs-on: ubuntu-latest
-    name: "Audit: Basic Config (pip-audit + pip-licenses)"
+    name: "Audit: Config 1 - pip-audit + pip-licenses ONLY"
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout code
@@ -31,7 +30,7 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
 
-      - name: Install audit tools first
+      - name: Install ONLY pip-audit and pip-licenses
         run: |
           python -m pip install --upgrade pip
           pip install pip-audit pip-licenses
@@ -41,15 +40,6 @@ jobs:
         run: |
           pip install -r requirements.txt
         continue-on-error: false
-
-      - name: Clean up old packages
-        run: |
-          echo "=========================================="
-          echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
-          echo "=========================================="
-          pip uninstall -y text-unidecode 2>/dev/null || true
-          echo "✅ Cleanup completed"
-        continue-on-error: true
 
       - name: Train ML Model
         run: |
@@ -63,34 +53,33 @@ jobs:
           ls -lh models/
         continue-on-error: false
 
-      - name: Run pip-audit (CVE scanning)
+      - name: Run pip-audit (CVE scanning ONLY)
         run: |
           echo "=========================================="
-          echo "🔍 SCANNING FOR VULNERABILITIES..."
+          echo "🔍 SCANNING VULNERABILITIES (pip-audit)..."
           echo "=========================================="
           pip-audit -r requirements.txt
           echo ""
         continue-on-error: false
 
-      - name: Generate licenses report (JSON)
+      - name: Generate licenses report with pip-licenses
         run: |
           echo "=========================================="
-          echo "📜 GENERATING LICENSES REPORT..."
+          echo "📜 GENERATING LICENSES REPORT (pip-licenses)..."
           echo "=========================================="
-          pip-licenses --format=json > basic-licenses.json
+          pip-licenses --format=json > config1-licenses.json
           pip-licenses
           echo ""
-          echo "✅ Licenses exported to basic-licenses.json"
+          echo "✅ Licenses exported to config1-licenses.json"
         continue-on-error: false
 
-      - name: Check for forbidden licenses (GPL gate - Basic PoC)
+      - name: Check for forbidden licenses (GPL gate)
         run: |
           echo "=========================================="
           echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
           echo "=========================================="
           if pip-licenses | grep -i "gpl"; then
             echo "❌ GPL license detected!"
-            echo "⚠️  This basic config fails on GPL licenses to demonstrate compliance checking"
             exit 1
           fi
           echo "✅ No GPL licenses found"
@@ -101,109 +90,60 @@ jobs:
         run: |
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
-          echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
+      - name: Build Docker image (LOCAL ONLY - NO PUSH)
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:basic-latest
-            ghcr.io/${{ github.repository }}/ml-api:basic-${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}
+          push: false
+          load: true
+          tags: ml-api:basic-local
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Test API endpoints
         run: |
-          docker run -d -p 8000:8000 --name test-api ghcr.io/${{ github.repository }}/ml-api:basic-latest
+          docker run -d -p 8000:8000 --name test-api ml-api:basic-local
           sleep 3
           
           echo "=========================================="
           echo "🧪 TESTING API ENDPOINTS..."
           echo "=========================================="
-          echo ""
           
-          # Test 1: Health check
           echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
-          echo "Response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+          HEALTH=$(curl -s http://localhost:8000/health)
+          if echo "$HEALTH" | grep -q "healthy"; then
             echo "✅ Health check passed"
           else
             echo "❌ Health check failed"
             exit 1
           fi
-          echo ""
           
-          # Test 2: Predict endpoint with sample data (Titanic format)
           echo "Testing /predict endpoint..."
-          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
+          PRED=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
-            -d '{
-              "pclass": 3,
-              "sex": 0,
-              "age": 34.5,
-              "sibsp": 0,
-              "parch": 0,
-              "fare": 7.8292,
-              "embarked": 2
-            }')
-          echo "Response: $PREDICT_RESPONSE"
-          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
+            -d '{"pclass": 3, "sex": 0, "age": 34.5, "sibsp": 0, "parch": 0, "fare": 7.8, "embarked": 2}')
+          if echo "$PRED" | grep -q "prediction"; then
             echo "✅ Predict endpoint passed"
           else
             echo "❌ Predict endpoint failed"
             exit 1
           fi
-          echo ""
-          
-          echo "=========================================="
-          echo "✅ All API tests passed!"
-          echo "=========================================="
           
           docker stop test-api || true
         continue-on-error: false
 
-      - name: Upload model artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: model-artifacts-config1
-          path: models/
-          if-no-files-found: warn
-
-      - name: Upload licenses report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: basic-licenses-report
-          path: basic-licenses.json
-          if-no-files-found: warn
-
-      - name: Upload Audit Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-reports-config1
+          name: config1-artifacts
           path: |
+            models/
+            config1-licenses.json
             AUDIT_REPORT.md
-            AUDIT_TABLE.md
-            AUDIT_TABLE.json
-            audit-report.json
-            GITHUB_SUMMARY.md
           if-no-files-found: warn
 

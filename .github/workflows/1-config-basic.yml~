@@ -19,7 +19,6 @@ jobs:
     name: "Audit: Basic Config (pip-audit + pip-licenses)"
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout code
@@ -41,15 +40,6 @@ jobs:
         run: |
           pip install -r requirements.txt
         continue-on-error: false
-
-      - name: Clean up old packages
-        run: |
-          echo "=========================================="
-          echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
-          echo "=========================================="
-          pip uninstall -y text-unidecode 2>/dev/null || true
-          echo "✅ Cleanup completed"
-        continue-on-error: true
 
       - name: Train ML Model
         run: |
@@ -102,35 +92,24 @@ jobs:
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
           echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
           ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
+      - name: Build Docker image (NO PUSH - Local only)
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:basic-latest
-            ghcr.io/${{ github.repository }}/ml-api:basic-${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}
+          push: false
+          load: true
+          tags: ml-api:basic-local
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Test API endpoints
         run: |
-          docker run -d -p 8000:8000 --name test-api ghcr.io/${{ github.repository }}/ml-api:basic-latest
+          docker run -d -p 8000:8000 --name test-api ml-api:basic-local
           sleep 3
           
           echo "=========================================="
@@ -207,3 +186,4 @@ jobs:
             audit-report.json
             GITHUB_SUMMARY.md
           if-no-files-found: warn
+

@@ -20,7 +20,7 @@ on:
 jobs:
   advanced-scan:
     runs-on: ubuntu-latest
-    name: "Audit: Advanced Config (safety + licensecheck + pipdeptree)"
+    name: "Audit: Advanced Config (safety + licensecheck)"
     permissions:
       contents: read
       packages: write
@@ -113,29 +113,20 @@ jobs:
       - name: Install audit tools (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
-          pip install safety licensecheck pipdeptree pip-licenses
+          pip install safety licensecheck pip-licenses
         continue-on-error: false
 
       - name: Install audit tools (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
-          poetry add --group dev safety licensecheck pipdeptree pip-licenses
+          poetry add --group dev safety licensecheck pip-licenses
         continue-on-error: false
 
       - name: Install audit tools (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
-          pipenv install --dev safety licensecheck pipdeptree pip-licenses
+          pipenv install --dev safety licensecheck pip-licenses
         continue-on-error: false
-
-      - name: Clean up old packages
-        run: |
-          echo "=========================================="
-          echo "🧹 CLEANING UP OLD/UNWANTED PACKAGES..."
-          echo "=========================================="
-          pip uninstall -y text-unidecode 2>/dev/null || true
-          echo "✅ Cleanup completed"
-        continue-on-error: true
 
       - name: Train ML Model (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
@@ -213,7 +204,7 @@ jobs:
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL)..."
+          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden)..."
           echo "=========================================="
           licensecheck --zero
           
@@ -229,7 +220,7 @@ jobs:
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) via Poetry..."
+          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden) via Poetry..."
           echo "=========================================="
           poetry run licensecheck --zero
           
@@ -245,7 +236,7 @@ jobs:
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
           echo "=========================================="
-          echo "⚖️  CHECKING LICENSE STRATEGY (REJECT:GPL) via Pipenv..."
+          echo "⚖️  CHECKING LICENSE STRATEGY (allowed/forbidden) via Pipenv..."
           echo "=========================================="
           pipenv run licensecheck --zero
           
@@ -254,39 +245,6 @@ jobs:
             exit 1
           fi
           echo "✅ No GPL licenses found"
-          echo ""
-        continue-on-error: false
-
-      - name: Generate dependency tree (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "🧪 DEPENDENCY TREE ANALYSIS"
-          echo "=========================================="
-          pipdeptree > advanced-dependency-tree.txt
-          cat advanced-dependency-tree.txt
-          echo ""
-        continue-on-error: false
-
-      - name: Generate dependency tree (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "🧪 DEPENDENCY TREE ANALYSIS via Poetry"
-          echo "=========================================="
-          poetry run pipdeptree > advanced-dependency-tree.txt
-          cat advanced-dependency-tree.txt
-          echo ""
-        continue-on-error: false
-
-      - name: Generate dependency tree (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "🧪 DEPENDENCY TREE ANALYSIS via Pipenv"
-          echo "=========================================="
-          pipenv run pipdeptree > advanced-dependency-tree.txt
-          cat advanced-dependency-tree.txt
           echo ""
         continue-on-error: false
 
@@ -351,7 +309,6 @@ jobs:
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
           echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md audit-report.json GITHUB_SUMMARY.md
           ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
@@ -377,10 +334,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Advanced API tests (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
+      - name: Test API endpoints
         run: |
-          docker run -d -p 8000:8000 --name test-api-adv ghcr.io/${{ github.repository }}/ml-api:advanced-latest
+          docker run -d -p 8000:8000 --name test-api ghcr.io/${{ github.repository }}/ml-api:advanced-latest
           sleep 4
           
           echo "=========================================="
@@ -388,7 +344,6 @@ jobs:
           echo "=========================================="
           echo ""
           
-          # Test 1: Health check
           echo "Testing /health endpoint..."
           HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
           echo "Response: $HEALTH_RESPONSE"
@@ -400,7 +355,6 @@ jobs:
           fi
           echo ""
           
-          # Test 2: Predict endpoint
           echo "Testing /predict endpoint..."
           PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
@@ -418,95 +372,7 @@ jobs:
           echo "✅ All Advanced API tests passed!"
           echo "=========================================="
           
-          docker stop test-api-adv || true
-        continue-on-error: false
-
-      - name: Advanced API tests (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          docker run -d -p 8000:8000 --name test-api-adv ghcr.io/${{ github.repository }}/ml-api:advanced-latest
-          sleep 4
-          
-          echo "=========================================="
-          echo "🧪 TESTING API ENDPOINTS (Advanced via Poetry)..."
-          echo "=========================================="
-          echo ""
-          
-          # Test 1: Health check
-          echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
-          echo "Response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed"
-            exit 1
-          fi
-          echo ""
-          
-          # Test 2: Predict endpoint
-          echo "Testing /predict endpoint..."
-          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          echo "Response: $PREDICT_RESPONSE"
-          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
-            echo "✅ Predict endpoint passed"
-          else
-            echo "❌ Predict endpoint failed"
-            exit 1
-          fi
-          echo ""
-          
-          echo "=========================================="
-          echo "✅ All Advanced API tests passed!"
-          echo "=========================================="
-          
-          docker stop test-api-adv || true
-        continue-on-error: false
-
-      - name: Advanced API tests (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          docker run -d -p 8000:8000 --name test-api-adv ghcr.io/${{ github.repository }}/ml-api:advanced-latest
-          sleep 4
-          
-          echo "=========================================="
-          echo "🧪 TESTING API ENDPOINTS (Advanced via Pipenv)..."
-          echo "=========================================="
-          echo ""
-          
-          # Test 1: Health check
-          echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
-          echo "Response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed"
-            exit 1
-          fi
-          echo ""
-          
-          # Test 2: Predict endpoint
-          echo "Testing /predict endpoint..."
-          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          echo "Response: $PREDICT_RESPONSE"
-          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
-            echo "✅ Predict endpoint passed"
-          else
-            echo "❌ Predict endpoint failed"
-            exit 1
-          fi
-          echo ""
-          
-          echo "=========================================="
-          echo "✅ All Advanced API tests passed!"
-          echo "=========================================="
-          
-          docker stop test-api-adv || true
+          docker stop test-api || true
         continue-on-error: false
 
       - name: Upload model artifacts
@@ -524,7 +390,6 @@ jobs:
           name: advanced-audit-reports
           path: |
             advanced-safety-report.json
-            advanced-dependency-tree.txt
             advanced-licenses.json
           if-no-files-found: warn
 
@@ -550,3 +415,4 @@ jobs:
             audit-report.json
             GITHUB_SUMMARY.md
           if-no-files-found: warn
+
