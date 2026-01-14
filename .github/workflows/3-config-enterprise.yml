@@ -10,8 +10,6 @@ on:
       - ".github/workflows/3-config-enterprise.yml"
       - "generate_audit_report.py"
       - "Dockerfile"
-      - "Dockerfile.dev"
-      - "Dockerfile.prod"
   pull_request:
     branches: [main, develop]
 
@@ -111,37 +109,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and PUSH Docker image (Dev)
-        if: github.ref != 'refs/heads/main'
+      - name: Build and PUSH Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.dev
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/ml-api:config3-dev-latest
-            ghcr.io/${{ github.repository }}/ml-api:config3-dev-${{ github.sha }}
+            ghcr.io/${{ github.repository }}/ml-api:config3-latest
+            ghcr.io/${{ github.repository }}/ml-api:config3-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: ENVIRONMENT=dev
-
-      - name: Build and PUSH Docker image (Prod)
-        if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.prod
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:config3-prod-latest
-            ghcr.io/${{ github.repository }}/ml-api:config3-prod-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: ENVIRONMENT=prod
 
       - name: Comprehensive API testing
         run: |
-          docker run -d -p 8000:8000 --name test-api-enterprise ghcr.io/${{ github.repository }}/ml-api:config3-dev-latest
+          docker run -d -p 8000:8000 --name test-api-enterprise ghcr.io/${{ github.repository }}/ml-api:config3-latest
           sleep 4
           
           echo "=========================================="
