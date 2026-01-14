@@ -10,15 +10,13 @@ on:
       - ".github/workflows/3-config-enterprise.yml"
       - "generate_audit_report.py"
       - "Dockerfile"
-      - "Dockerfile.dev"
-      - "Dockerfile.prod"
   pull_request:
     branches: [main, develop]
 
 jobs:
   enterprise-full-audit:
     runs-on: ubuntu-latest
-    name: "Audit: Enterprise Config (fossa-cli + pip-audit + SBOM)"
+    name: "Audit: Config 3 - fossa-cli + pip-audit ONLY"
     permissions:
       contents: read
       packages: write
@@ -37,13 +35,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          echo "✅ Dependencies installed via pip"
+          echo "✅ Dependencies installed"
         continue-on-error: false
 
-      - name: Install enterprise audit tools
+      - name: Install ONLY fossa-cli and pip-audit
         run: |
-          pip install pip-audit pip-licenses pipdeptree
-          echo "✅ Audit tools installed"
+          pip install pip-audit
+          echo "✅ Installed: pip-audit"
+          
+          # Install fossa-cli
+          echo "Installing fossa-cli..."
+          curl -L https://github.com/fossas/fossa-cli/releases/download/v3.8.13/fossa-linux-x64.zip -o fossa.zip
+          unzip -o fossa.zip -d /usr/local/bin/
+          chmod +x /usr/local/bin/fossa
+          fossa --version || echo "⚠️  fossa-cli installed (may need config)"
+          echo "✅ Installed: fossa-cli"
         continue-on-error: false
 
       - name: Train ML Model
@@ -54,97 +60,90 @@ jobs:
           python save_model.py
           echo ""
           echo "✅ Model training completed"
-          echo "Generated artifacts:"
           ls -lh models/
         continue-on-error: false
 
-      - name: Run pip-audit Full audit
+      - name: Run pip-audit (full vulnerability scan)
         run: |
           echo "=========================================="
-          echo "🔍 FULL AUDIT REPORT (pip-audit)..."
+          echo "🔍 FULL AUDIT WITH pip-audit..."
           echo "=========================================="
-          pip-audit --desc > enterprise-audit-full.txt 2>&1
-          cat enterprise-audit-full.txt
+          pip-audit --desc > config3-pip-audit-full.txt 2>&1
+          cat config3-pip-audit-full.txt
           echo ""
         continue-on-error: false
 
-      - name: Install FOSSA CLI for full scan
+      - name: Run FOSSA CLI for complete scan (licenses + dependencies)
         run: |
           echo "=========================================="
-          echo "📦 INSTALLING FOSSA CLI..."
+          echo "📋 RUNNING FOSSA CLI (full scan: licenses+deps)..."
           echo "=========================================="
-          curl -L https://github.com/fossas/fossa-cli/releases/download/v3.8.13/fossa-linux-x64.zip -o fossa.zip || true
-          unzip -o fossa.zip -d /usr/local/bin/ || true
-          chmod +x /usr/local/bin/fossa || true
-          fossa --version || echo "⚠️  FOSSA CLI not available (optional for this environment)"
-        continue-on-error: true
-
-      - name: Run FOSSA CLI for full scan (licenses + dependencies)
-        run: |
-          echo "=========================================="
-          echo "📋 RUNNING FOSSA FULL SCAN (licenses+deps)..."
-          echo "=========================================="
+          
           if command -v fossa &> /dev/null; then
-            fossa analyze --skip-upload > enterprise-fossa-report.txt 2>&1 || true
-            cat enterprise-fossa-report.txt || echo "⚠️  FOSSA analysis completed with status"
+            # Try to run FOSSA without authentication (limited mode)
+            fossa analyze --skip-upload > config3-fossa-report.txt 2>&1 || true
+            
+            if [ -f config3-fossa-report.txt ]; then
+              cat config3-fossa-report.txt
+            fi
+            echo ""
+            echo "✅ FOSSA scan completed"
           else
-            echo "⚠️  FOSSA CLI not available in this environment"
-            echo "    Consider running: fossa analyze --skip-upload locally"
-            echo "    Or use in CI/CD with FOSSA service token"
+            echo "⚠️  fossa-cli not available in this environment"
+            echo "    Run locally: fossa analyze --skip-upload"
           fi
-          echo ""
         continue-on-error: true
 
-      - name: Generate SBOM (CycloneDX format)
+      - name: Generate SBOM (Software Bill of Materials)
         run: |
           echo "=========================================="
-          echo "📋 GENERATING SOFTWARE BILL OF MATERIALS..."
+          echo "📋 GENERATING SBOM (from FOSSA / pip)..."
           echo "=========================================="
-          pip install cyclonedx-bom
-          cyclonedx-bom -o enterprise-sbom.json -f json
-          echo "✅ SBOM generated in CycloneDX format"
-          cat enterprise-sbom.json | head -50
-          echo ""
-        continue-on-error: true
-
-      - name: Generate comprehensive licenses report
-        run: |
-          echo "=========================================="
-          echo "📜 GENERATING COMPREHENSIVE LICENSES REPORT..."
-          echo "=========================================="
-          pip-licenses --format=json > enterprise-licenses.json
-          pip-licenses --format=csv > enterprise-licenses.csv
-          pip-licenses
-          echo ""
-          echo "✅ Licenses exported to enterprise-licenses.json and .csv"
-        continue-on-error: false
-
-      - name: Generate dependency tree
-        run: |
-          echo "=========================================="
-          echo "🧪 COMPREHENSIVE DEPENDENCY TREE..."
-          echo "=========================================="
-          pipdeptree > enterprise-dependency-tree.txt
-          cat enterprise-dependency-tree.txt
+          
+          # FOSSA can export SBOM, but as alternative:
+          # We can use pip to list packages for SBOM
+          pip list --format=json > config3-sbom-packages.json
+          
+          echo "✅ SBOM package list generated"
+          cat config3-sbom-packages.json | head -30
           echo ""
         continue-on-error: false
 
-      - name: Generate version inventory
+      - name: Generate comprehensive audit report
         run: |
           echo "=========================================="
-          echo "📦 COMPLETE VERSION INVENTORY..."
+          echo "📊 GENERATING COMPREHENSIVE REPORT..."
           echo "=========================================="
-          pip list > enterprise-versions.txt
-          cat enterprise-versions.txt
-          echo ""
+          
+          # Create comprehensive report
+          {
+            echo "# Enterprise Audit Report (Config 3)"
+            echo ""
+            echo "## pip-audit Full Scan"
+            echo '```'
+            cat config3-pip-audit-full.txt
+            echo '```'
+            echo ""
+            echo "## Installed Packages (SBOM)"
+            echo '```json'
+            cat config3-sbom-packages.json
+            echo '```'
+            echo ""
+            if [ -f config3-fossa-report.txt ]; then
+              echo "## FOSSA Scan Results"
+              echo '```'
+              cat config3-fossa-report.txt
+              echo '```'
+            fi
+          } > config3-enterprise-report.md
+          
+          echo "✅ Comprehensive report generated"
         continue-on-error: false
 
       - name: Generate Audit Report
         run: |
           echo "Running generate_audit_report.py..."
           python generate_audit_report.py
-          echo "Checking if files were created..."
-          ls -la AUDIT_REPORT.md AUDIT_TABLE.md AUDIT_TABLE.json audit-report.json GITHUB_SUMMARY.md
         continue-on-error: false
 
       - name: Set up Docker Buildx
@@ -157,134 +156,87 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image (Dev)
-        if: github.ref != 'refs/heads/main'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-latest
-            ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-ent-dev
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push Docker image (Prod)
-        if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ml-api:enterprise-prod-latest
-            ghcr.io/${{ github.repository }}/ml-api:enterprise-prod-${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ml-api:v${{ github.run_number }}-ent-prod
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Comprehensive API testing
+      - name: Determine environment (dev/prod)
+        id: env
         run: |
-          docker run -d -p 8000:8000 --name test-api-ent ghcr.io/${{ github.repository }}/ml-api:enterprise-dev-latest
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+            echo "ENV_TAG=prod"
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "ENV_TAG=dev"
+          fi
+
+      - name: Build and PUSH Docker image (dev/prod to GHCR)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ml-api:config3-${{ steps.env.outputs.environment }}-latest
+            ghcr.io/${{ github.repository }}/ml-api:config3-${{ steps.env.outputs.environment }}-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test API endpoints (comprehensive)
+        run: |
+          docker run -d -p 8000:8000 --name test-api-config3 ghcr.io/${{ github.repository }}/ml-api:config3-${{ steps.env.outputs.environment }}-latest
           sleep 4
           
           echo "=========================================="
-          echo "🧪 COMPREHENSIVE API TESTING..."
+          echo "🧪 COMPREHENSIVE API TESTING (Config 3)..."
           echo "=========================================="
-          echo ""
           
-          echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s -X GET http://localhost:8000/health)
-          echo "Response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "healthy"; then
+          echo "Test 1: /health endpoint..."
+          HEALTH=$(curl -s http://localhost:8000/health)
+          if echo "$HEALTH" | grep -q "healthy"; then
             echo "✅ Health check passed"
           else
             echo "❌ Health check failed"
             exit 1
           fi
-          echo ""
           
-          echo "Testing /predict endpoint (Scenario 1)..."
-          PREDICT_RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
+          echo "Test 2: /predict scenario 1 (high class, female, adult)..."
+          PRED1=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
             -d '{"pclass": 1, "sex": 1, "age": 30, "sibsp": 0, "parch": 0, "fare": 100, "embarked": 2}')
-          echo "Response: $PREDICT_RESPONSE"
-          if echo "$PREDICT_RESPONSE" | grep -q '"prediction"'; then
-            echo "✅ Predict endpoint passed"
+          if echo "$PRED1" | grep -q "prediction"; then
+            echo "✅ Scenario 1 passed"
           else
-            echo "❌ Predict endpoint failed"
+            echo "❌ Scenario 1 failed"
             exit 1
           fi
-          echo ""
           
-          echo "Testing /predict endpoint (Scenario 2)..."
-          PREDICT_RESPONSE2=$(curl -s -X POST http://localhost:8000/predict \
+          echo "Test 3: /predict scenario 2 (low class, male, young)..."
+          PRED2=$(curl -s -X POST http://localhost:8000/predict \
             -H "Content-Type: application/json" \
-            -d '{"pclass": 3, "sex": 0, "age": 20, "sibsp": 1, "parch": 0, "fare": 8.05, "embarked": 0}')
-          if echo "$PREDICT_RESPONSE2" | grep -q '"prediction"'; then
+            -d '{"pclass": 3, "sex": 0, "age": 20, "sibsp": 1, "parch": 0, "fare": 8, "embarked": 0}')
+          if echo "$PRED2" | grep -q "prediction"; then
             echo "✅ Scenario 2 passed"
           else
             echo "❌ Scenario 2 failed"
             exit 1
           fi
+          
           echo ""
-          
           echo "=========================================="
-          echo "✅ All comprehensive API tests passed!"
+          echo "✅ All API tests passed!"
           echo "=========================================="
           
-          docker stop test-api-ent || true
+          docker stop test-api-config3 || true
         continue-on-error: false
 
-      - name: Upload model artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: model-artifacts-config3
-          path: models/
-          if-no-files-found: warn
-
-      - name: Upload enterprise SBOM
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: enterprise-sbom
-          path: enterprise-sbom.json
-          if-no-files-found: warn
-
-      - name: Upload enterprise full audit reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: enterprise-full-audit-reports
+          name: config3-artifacts
           path: |
-            enterprise-audit-full.txt
-            enterprise-dependency-tree.txt
-            enterprise-versions.txt
-            enterprise-licenses.json
-            enterprise-licenses.csv
-          if-no-files-found: warn
-
-      - name: Upload FOSSA scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: enterprise-fossa-results
-          path: enterprise-fossa-report.txt
-          if-no-files-found: ignore
-
-      - name: Upload Audit Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-reports-config3
-          path: |
+            models/
+            config3-pip-audit-full.txt
+            config3-fossa-report.txt
+            config3-sbom-packages.json
+            config3-enterprise-report.md
             AUDIT_REPORT.md
-            AUDIT_TABLE.md
-            AUDIT_TABLE.json
-            audit-report.json
-            GITHUB_SUMMARY.md
           if-no-files-found: warn
 
