@@ -188,6 +188,25 @@ jobs:
           echo ""
         continue-on-error: false
 
+      - name: Verify .licensecheck.toml exists (Poetry)
+        if: steps.detect-manager.outputs.manager == 'poetry'
+        run: |
+          echo "=========================================="
+          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
+          echo "=========================================="
+          if [ ! -f ".licensecheck.toml" ]; then
+            echo "❌ ERROR: .licensecheck.toml not found!"
+            echo "Files in repo root:"
+            ls -la | grep -i license || echo "No license files found"
+            exit 1
+          fi
+          echo "✅ Found .licensecheck.toml"
+          echo ""
+          echo "Configuration content:"
+          cat .licensecheck.toml
+          echo ""
+        continue-on-error: false
+
       - name: Check for forbidden licenses with strategy (Poetry)
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
@@ -195,7 +214,11 @@ jobs:
           echo "⚖️ CHECKING LICENSE STRATEGY (Poetry)..."
           echo "Config: .licensecheck.toml (allowed/forbidden)"
           echo "=========================================="
-          poetry run licensecheck --zero --file .licensecheck.toml
+          poetry run licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
+          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
           echo "✅ License check completed"
           echo ""
         continue-on-error: false
@@ -235,6 +258,25 @@ jobs:
           echo ""
         continue-on-error: false
 
+      - name: Verify .licensecheck.toml exists (Pipenv)
+        if: steps.detect-manager.outputs.manager == 'pipenv'
+        run: |
+          echo "=========================================="
+          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
+          echo "=========================================="
+          if [ ! -f ".licensecheck.toml" ]; then
+            echo "❌ ERROR: .licensecheck.toml not found!"
+            echo "Files in repo root:"
+            ls -la | grep -i license || echo "No license files found"
+            exit 1
+          fi
+          echo "✅ Found .licensecheck.toml"
+          echo ""
+          echo "Configuration content:"
+          cat .licensecheck.toml
+          echo ""
+        continue-on-error: false
+
       - name: Check for forbidden licenses with strategy (Pipenv)
         if: steps.detect-manager.outputs.manager == 'pipenv'
         run: |
@@ -242,7 +284,11 @@ jobs:
           echo "⚖️ CHECKING LICENSE STRATEGY (Pipenv)..."
           echo "Config: .licensecheck.toml (allowed/forbidden)"
           echo "=========================================="
-          pipenv run licensecheck --zero --file .licensecheck.toml
+          pipenv run licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
+          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
           echo "✅ License check completed"
           echo ""
         continue-on-error: false
@@ -282,6 +328,25 @@ jobs:
           echo ""
         continue-on-error: false
 
+      - name: Verify .licensecheck.toml exists (pip)
+        if: steps.detect-manager.outputs.manager == 'pip'
+        run: |
+          echo "=========================================="
+          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
+          echo "=========================================="
+          if [ ! -f ".licensecheck.toml" ]; then
+            echo "❌ ERROR: .licensecheck.toml not found!"
+            echo "Files in repo root:"
+            ls -la | grep -i license || echo "No license files found"
+            exit 1
+          fi
+          echo "✅ Found .licensecheck.toml"
+          echo ""
+          echo "Configuration content:"
+          cat .licensecheck.toml
+          echo ""
+        continue-on-error: false
+
       - name: Check for forbidden licenses with strategy (pip)
         if: steps.detect-manager.outputs.manager == 'pip'
         run: |
@@ -289,7 +354,11 @@ jobs:
           echo "⚖️ CHECKING LICENSE STRATEGY (pip)..."
           echo "Config: .licensecheck.toml (allowed/forbidden)"
           echo "=========================================="
-          licensecheck --zero --file .licensecheck.toml
+          licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
+          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
           echo "✅ License check completed"
           echo ""
         continue-on-error: false
