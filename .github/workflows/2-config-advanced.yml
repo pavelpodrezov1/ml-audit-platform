@@ -1,4 +1,4 @@
-name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check) v3
+name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check) v4
 
 on:
   push:
@@ -97,9 +97,11 @@ jobs:
           which safety
           which licensecheck
           which pip-licenses
+          echo ""
+          echo "Tool versions:"
           safety --version
-          licensecheck --version
           pip-licenses --version
+          echo "licensecheck tool installed (no version flag)"
         continue-on-error: false
 
       # ========== TRAINING & AUDITING (Poetry) ==========

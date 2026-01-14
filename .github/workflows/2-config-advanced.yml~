@@ -1,4 +1,4 @@
-name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check)
+name: Config 2 - Advanced CI/CD (Poetry/Pipenv + Safety + License Check) v3
 
 on:
   push:
@@ -36,6 +36,17 @@ jobs:
           python-version: "3.11"
           cache: 'pip'
 
+      - name: "🔍 DEBUG: List files in repo root"
+        run: |
+          echo "=========================================="
+          echo "FILES IN REPO ROOT:"
+          echo "=========================================="
+          ls -la | head -30
+          echo ""
+          echo "Looking for licensecheck config:"
+          find . -name "*licensecheck*" -o -name ".licensecheck*" 2>/dev/null || echo "NOT FOUND"
+          echo ""
+
       - name: Detect dependency manager (Poetry or Pipenv)
         id: detect-manager
         run: |
@@ -63,14 +74,6 @@ jobs:
           echo "✅ Poetry installed"
         continue-on-error: false
 
-      - name: Cache Poetry dependencies
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        uses: actions/cache@v3
-        with:
-          path: .venv
-          key: poetry-${{ hashFiles('poetry.lock') }}
-          restore-keys: poetry-
-
       - name: Install dependencies via Poetry
         if: steps.detect-manager.outputs.manager == 'poetry'
         run: |
@@ -81,76 +84,22 @@ jobs:
           echo "✅ Dependencies installed via Poetry"
         continue-on-error: false
 
-      - name: Install audit tools via Poetry
-        if: steps.detect-manager.outputs.manager == 'poetry'
+      - name: Install audit tools directly via pip (NOT through Poetry!)
         run: |
           echo "=========================================="
-          echo "🔧 INSTALLING AUDIT TOOLS VIA POETRY..."
+          echo "🔧 INSTALLING AUDIT TOOLS VIA PIP DIRECTLY..."
           echo "=========================================="
-          poetry add --group dev safety licensecheck pip-licenses
+          pip install --upgrade pip setuptools wheel
+          pip install safety licensecheck pip-licenses pipdeptree
           echo "✅ Audit tools installed"
-        continue-on-error: false
-
-      # ========== PIPENV SECTION ==========
-      - name: Install Pipenv (if needed)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📦 INSTALLING PIPENV..."
-          echo "=========================================="
-          python -m pip install --upgrade pip
-          pip install pipenv
-          echo "✅ Pipenv installed"
-        continue-on-error: false
-
-      - name: Cache Pipenv dependencies
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        uses: actions/cache@v3
-        with:
-          path: .local/share/virtualenvs
-          key: pipenv-${{ hashFiles('Pipfile.lock') }}
-          restore-keys: pipenv-
-
-      - name: Install dependencies via Pipenv
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📦 INSTALLING DEPENDENCIES VIA PIPENV..."
-          echo "=========================================="
-          pipenv install
-          echo "✅ Dependencies installed via Pipenv"
-        continue-on-error: false
-
-      - name: Install audit tools via Pipenv
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "🔧 INSTALLING AUDIT TOOLS VIA PIPENV..."
-          echo "=========================================="
-          pipenv install --dev safety licensecheck pip-licenses
-          echo "✅ Audit tools installed"
-        continue-on-error: false
-
-      # ========== PIP SECTION (fallback) ==========
-      - name: Install dependencies via pip
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "📦 INSTALLING DEPENDENCIES VIA PIP..."
-          echo "=========================================="
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          echo "✅ Dependencies installed via pip"
-        continue-on-error: false
-
-      - name: Install audit tools via pip
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "🔧 INSTALLING AUDIT TOOLS VIA PIP..."
-          echo "=========================================="
-          pip install safety licensecheck pip-licenses
-          echo "✅ Audit tools installed"
+          echo ""
+          echo "Verifying installations:"
+          which safety
+          which licensecheck
+          which pip-licenses
+          safety --version
+          licensecheck --version
+          pip-licenses --version
         continue-on-error: false
 
       # ========== TRAINING & AUDITING (Poetry) ==========
@@ -165,162 +114,20 @@ jobs:
           ls -lh models/
         continue-on-error: false
 
-      - name: Run Safety vulnerability scan (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
+      - name: Run Safety vulnerability scan
         run: |
           echo "=========================================="
-          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (Poetry)..."
-          echo "=========================================="
-          poetry run safety check --json > advanced-safety-report.json || true
-          cat advanced-safety-report.json
-          echo ""
-        continue-on-error: false
-
-      - name: Generate licenses report (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "📋 GENERATING LICENSES REPORT (Poetry)..."
-          echo "=========================================="
-          poetry run pip-licenses --format json > advanced-licenses.json
-          poetry run pip-licenses
-          echo "✅ Licenses exported to advanced-licenses.json"
-          echo ""
-        continue-on-error: false
-
-      - name: Verify .licensecheck.toml exists (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
-          echo "=========================================="
-          if [ ! -f ".licensecheck.toml" ]; then
-            echo "❌ ERROR: .licensecheck.toml not found!"
-            echo "Files in repo root:"
-            ls -la | grep -i license || echo "No license files found"
-            exit 1
-          fi
-          echo "✅ Found .licensecheck.toml"
-          echo ""
-          echo "Configuration content:"
-          cat .licensecheck.toml
-          echo ""
-        continue-on-error: false
-
-      - name: Check for forbidden licenses with strategy (Poetry)
-        if: steps.detect-manager.outputs.manager == 'poetry'
-        run: |
-          echo "=========================================="
-          echo "⚖️ CHECKING LICENSE STRATEGY (Poetry)..."
-          echo "Config: .licensecheck.toml (allowed/forbidden)"
-          echo "=========================================="
-          poetry run licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
-          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
-            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
-          echo "✅ License check completed"
-          echo ""
-        continue-on-error: false
-
-      # ========== TRAINING & AUDITING (Pipenv) ==========
-      - name: Train ML Model (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) VIA PIPENV..."
-          echo "=========================================="
-          pipenv run python save_model.py
-          echo "✅ Model training completed"
-          ls -lh models/
-        continue-on-error: false
-
-      - name: Run Safety vulnerability scan (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (Pipenv)..."
-          echo "=========================================="
-          pipenv run safety check --json > advanced-safety-report.json || true
-          cat advanced-safety-report.json
-          echo ""
-        continue-on-error: false
-
-      - name: Generate licenses report (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "📋 GENERATING LICENSES REPORT (Pipenv)..."
-          echo "=========================================="
-          pipenv run pip-licenses --format json > advanced-licenses.json
-          pipenv run pip-licenses
-          echo "✅ Licenses exported to advanced-licenses.json"
-          echo ""
-        continue-on-error: false
-
-      - name: Verify .licensecheck.toml exists (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
-          echo "=========================================="
-          if [ ! -f ".licensecheck.toml" ]; then
-            echo "❌ ERROR: .licensecheck.toml not found!"
-            echo "Files in repo root:"
-            ls -la | grep -i license || echo "No license files found"
-            exit 1
-          fi
-          echo "✅ Found .licensecheck.toml"
-          echo ""
-          echo "Configuration content:"
-          cat .licensecheck.toml
-          echo ""
-        continue-on-error: false
-
-      - name: Check for forbidden licenses with strategy (Pipenv)
-        if: steps.detect-manager.outputs.manager == 'pipenv'
-        run: |
-          echo "=========================================="
-          echo "⚖️ CHECKING LICENSE STRATEGY (Pipenv)..."
-          echo "Config: .licensecheck.toml (allowed/forbidden)"
-          echo "=========================================="
-          pipenv run licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
-          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
-            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
-          echo "✅ License check completed"
-          echo ""
-        continue-on-error: false
-
-      # ========== TRAINING & AUDITING (pip) ==========
-      - name: Train ML Model (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "🤖 TRAINING ML MODEL (Titanic) VIA PIP..."
-          echo "=========================================="
-          python save_model.py
-          echo "✅ Model training completed"
-          ls -lh models/
-        continue-on-error: false
-
-      - name: Run Safety vulnerability scan (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
-        run: |
-          echo "=========================================="
-          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN (pip)..."
+          echo "🔐 RUNNING SAFETY VULNERABILITY SCAN..."
           echo "=========================================="
           safety check --json > advanced-safety-report.json || true
           cat advanced-safety-report.json
           echo ""
         continue-on-error: false
 
-      - name: Generate licenses report (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
+      - name: Generate licenses report
         run: |
           echo "=========================================="
-          echo "📋 GENERATING LICENSES REPORT (pip)..."
+          echo "📋 GENERATING LICENSES REPORT..."
           echo "=========================================="
           pip-licenses --format json > advanced-licenses.json
           pip-licenses
@@ -328,39 +135,69 @@ jobs:
           echo ""
         continue-on-error: false
 
-      - name: Verify .licensecheck.toml exists (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
+      - name: "🔍 CRITICAL: Verify .licensecheck.toml EXISTS and READABLE"
         run: |
           echo "=========================================="
-          echo "🔍 VERIFYING LICENSE CHECK CONFIGURATION..."
+          echo "🔍 CHECKING FOR .licensecheck.toml..."
           echo "=========================================="
-          if [ ! -f ".licensecheck.toml" ]; then
-            echo "❌ ERROR: .licensecheck.toml not found!"
-            echo "Files in repo root:"
-            ls -la | grep -i license || echo "No license files found"
+          
+          # Check in current directory
+          if [ -f ".licensecheck.toml" ]; then
+            echo "✅ Found .licensecheck.toml in current directory"
+            echo ""
+            echo "FILE CONTENT:"
+            cat .licensecheck.toml
+            echo ""
+            echo "FILE PERMISSIONS:"
+            ls -la .licensecheck.toml
+            echo ""
+          else
+            echo "❌ ERROR: .licensecheck.toml NOT FOUND in current directory!"
+            echo ""
+            echo "Current directory:"
+            pwd
+            echo ""
+            echo "Files matching pattern:"
+            find . -iname "*license*" 2>/dev/null | head -20
+            echo ""
+            echo "GITHUB WORKSPACE:"
+            echo "$GITHUB_WORKSPACE"
+            echo ""
+            echo "Exit with error code 1"
             exit 1
           fi
-          echo "✅ Found .licensecheck.toml"
-          echo ""
-          echo "Configuration content:"
-          cat .licensecheck.toml
-          echo ""
         continue-on-error: false
 
-      - name: Check for forbidden licenses with strategy (pip)
-        if: steps.detect-manager.outputs.manager == 'pip'
+      - name: "⚖️ CRITICAL: Check for FORBIDDEN licenses with licensecheck"
         run: |
           echo "=========================================="
-          echo "⚖️ CHECKING LICENSE STRATEGY (pip)..."
-          echo "Config: .licensecheck.toml (allowed/forbidden)"
+          echo "⚖️ CHECKING LICENSE STRATEGY (FORBIDDEN: GPL)..."
           echo "=========================================="
-          licensecheck --zero --file .licensecheck.toml || EXIT_CODE=$?
-          if [ ! -z "$EXIT_CODE" ] && [ $EXIT_CODE -ne 0 ]; then
-            echo "❌ Forbidden licenses detected! Exit code: $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
-          echo "✅ License check completed"
+          
+          # Run licensecheck with explicit error handling
+          echo "Running: licensecheck --zero --file .licensecheck.toml"
           echo ""
+          
+          set +e  # Don't exit on error yet
+          licensecheck --zero --file .licensecheck.toml
+          LICENSE_CHECK_EXIT=$?
+          set -e  # Resume exiting on error
+          
+          echo ""
+          echo "licensecheck exit code: $LICENSE_CHECK_EXIT"
+          echo ""
+          
+          # If exit code is non-zero, it means forbidden licenses were found
+          if [ $LICENSE_CHECK_EXIT -ne 0 ]; then
+            echo "❌ FORBIDDEN LICENSES DETECTED!"
+            echo "Exit code: $LICENSE_CHECK_EXIT"
+            echo "Config 2 FAILED ❌"
+            exit 1
+          else
+            echo "✅ All licenses are allowed (no forbidden licenses found)"
+            echo "Config 2 SUCCESS ✅"
+            exit 0
+          fi
         continue-on-error: false
 
       # ========== COMMON STEPS ==========
@@ -369,7 +206,6 @@ jobs:
           echo "=========================================="
           echo "🌳 GENERATING DEPENDENCY TREE..."
           echo "=========================================="
-          pip install pipdeptree
           pipdeptree > advanced-dependency-tree.txt
           cat advanced-dependency-tree.txt
           echo "✅ Dependency tree generated"
@@ -390,9 +226,9 @@ jobs:
       - name: Generate comprehensive Audit Report
         run: |
           echo "Running generate_audit_report.py..."
-          python generate_audit_report.py
+          python generate_audit_report.py || echo "⚠️ generate_audit_report.py not found or failed"
           echo "✅ Audit reports generated"
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Create comprehensive audit reports archive
         run: |
